@@ -4,6 +4,7 @@ agentops/**/qa-screenshots/
 __pycache__/
 *.pyc
 .env
+backend/.env
 *.egg-info/
 dist/
 build/
