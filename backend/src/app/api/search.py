@@ -14,7 +14,7 @@ async def health_check() -> dict[str, str]:
 
 
 @router.get("/airports", response_model=list[AirportResult])
-def airports(
+async def airports(
     q: str = Query(..., min_length=3, description="Airport/city search keyword"),
     settings: Settings = Depends(get_settings),
 ) -> list[AirportResult]:

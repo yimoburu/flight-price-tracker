@@ -1,13 +1,15 @@
 from unittest.mock import MagicMock
+
 from app.services.flight_service import search_airports
 
 
 def test_search_airports_returns_results() -> None:
     mock_client = MagicMock()
     mock_response = MagicMock()
+    uk = {"countryName": "United Kingdom"}
     mock_response.data = [
-        {'iataCode': 'LHR', 'name': 'Heathrow', 'address': {'cityName': 'London', 'countryName': 'United Kingdom'}},
-        {'iataCode': 'LGW', 'name': 'Gatwick', 'address': {'cityName': 'London', 'countryName': 'United Kingdom'}},
+        {"iataCode": "LHR", "name": "Heathrow", "address": {"cityName": "London", **uk}},
+        {"iataCode": "LGW", "name": "Gatwick", "address": {"cityName": "London", **uk}},
     ]
     mock_client.reference_data.locations.get.return_value = mock_response
     results = search_airports('LON', mock_client)
