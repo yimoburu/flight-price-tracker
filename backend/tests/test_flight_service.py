@@ -1,7 +1,6 @@
 """Tests for flight_service.py — TDD for t05."""
-import threading
 from datetime import date
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -13,7 +12,6 @@ from app.services.flight_service import (
     search_airports,
     search_flights,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -304,7 +302,7 @@ class TestDateFiltering:
         )
         # 8 dates in window, top 5 cheapest prices are 100–140
         dates_data = [
-            {"departureDate": f"2026-06-{str(i).zfill(2)}", "price": {"total": str(100 + i * 10 - 10)}}
+            {"departureDate": f"2026-06-{str(i).zfill(2)}", "price": {"total": str(100 + i * 10 - 10)}}  # noqa: E501
             for i in range(1, 9)
         ]
         client = _make_mock_client(dates_data=dates_data, offers_data=[_make_offer("100.00")])
@@ -418,10 +416,12 @@ class TestRoundTripMapping:
             }
         ]
         outbound_seg = _make_segment_dict(
-            dep_iata="JFK", arr_iata="LAX", dep_at="2026-06-05T08:00:00", arr_at="2026-06-05T11:00:00"
+            dep_iata="JFK", arr_iata="LAX",
+            dep_at="2026-06-05T08:00:00", arr_at="2026-06-05T11:00:00"
         )
         return_seg = _make_segment_dict(
-            dep_iata="LAX", arr_iata="JFK", dep_at="2026-06-20T12:00:00", arr_at="2026-06-20T20:00:00"
+            dep_iata="LAX", arr_iata="JFK",
+            dep_at="2026-06-20T12:00:00", arr_at="2026-06-20T20:00:00"
         )
         offer = _make_offer(
             price="300.00",
