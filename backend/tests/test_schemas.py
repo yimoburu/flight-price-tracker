@@ -1,13 +1,14 @@
 """Tests for Pydantic v2 schemas in app.schemas.search."""
+from datetime import date
+
 import pytest
-from datetime import date, timedelta
 from pydantic import ValidationError
 
 from app.schemas.search import (
-    SearchRequest,
-    FlightOfferResponse,
-    SegmentInfo,
     AirportResult,
+    FlightOfferResponse,
+    SearchRequest,
+    SegmentInfo,
 )
 
 # ---------------------------------------------------------------------------
