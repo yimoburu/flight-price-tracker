@@ -1,0 +1,1077 @@
+tasks:
+  - id: t01
+    name: config-and-db-setup
+    status: in-review
+    retry_count: 0
+    assigned_task_id: null
+    completed_at: 2026-03-29T00:30:00Z
+    description: |
+      Extend Settings with all m02 environment variables and implement the SQLAlchemy
+      synchronous database layer (engine, session factory, Base, get_db dependency).
+      This task establishes the DB foundation that all other backend tasks depend on.
+    interfaces: |
+      FILE: backend/src/app/config.py
+        Extend the existing Settings class (do NOT remove existing fields):
+          database_url: str = "sqlite:///./flight_tracker.db"
+          scheduler_interval_minutes: int = 60
+          smtp_host: str = "localhost"
+          smtp_port: int = 25
+          smtp_username: Optional[str] = None
+          smtp_password: Optional[str] = None
+          smtp_from_address: str = "alerts@flighttracker.local"
+          smtp_use_tls: bool = False
+        All Optional fields must import Optional from typing.
+
+      FILE: backend/src/app/db.py  (currently contains only a comment stub)
+        Replace stub with:
+
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import DeclarativeBase, sessionmaker
+        from app.config import get_settings
+
+        class Base(DeclarativeBase):
+            pass
+
+        def _make_engine():
+            settings = get_settings()
+            return create_engine(
+                settings.database_url,
+                connect_args={"check_same_thread": False},
+            )
+
+        engine = _make_engine()
+        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+        def get_db():
+            """FastAPI dependency: yields a DB session, closes on exit."""
+            db = SessionLocal()
+            try:
+                yield db
+            finally:
+                db.close()
+
+        Exports required: Base, engine, SessionLocal, get_db
+
+      FILE: backend/tests/test_config_db.py  (new)
+        Test file for this task. Location: backend/tests/test_config_db.py
+
+    depends_on: []
+    test_file: backend/tests/test_config_db.py
+
+  - id: t02
+    name: db-models
+    status: pending
+    retry_count: 0
+    assigned_task_id: null
+    completed_at: null
+    description: |
+      Implement the TrackedSearch and PriceSnapshot SQLAlchemy ORM models.
+      These define the two new database tables. The models module must be importable
+      independently and must not import application logic (only db.py).
+    interfaces: |
+      FILE: backend/src/app/models/tracked_search.py  (new)
+        Must export: TrackedSearch, PriceSnapshot
+
+        from app.db import Base
+        from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Integer, Numeric, String
+        from sqlalchemy.orm import relationship
+        import uuid
+        from datetime import datetime
+
+        class TrackedSearch(Base):
+            __tablename__ = "tracked_searches"
+            id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+            client_id = Column(String(36), nullable=False, index=True)
+            origin = Column(String(3), nullable=False)
+            destination = Column(String(3), nullable=False)
+            trip_type = Column(String(10), nullable=False)  # 'one_way' or 'round_trip'
+            departure_date_from = Column(Date, nullable=False)
+            departure_date_to = Column(Date, nullable=False)
+            return_date_from = Column(Date, nullable=True)
+            return_date_to = Column(Date, nullable=True)
+            adults = Column(Integer, nullable=False, default=1)
+            max_stops = Column(Integer, nullable=True)
+            threshold_price = Column(Numeric(10, 2), nullable=False)
+            alert_email = Column(String(254), nullable=False)
+            created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+            is_active = Column(Boolean, nullable=False, default=True)
+            snapshots = relationship("PriceSnapshot", back_populates="tracked_search", cascade="all, delete-orphan")
+
+        class PriceSnapshot(Base):
+            __tablename__ = "price_snapshots"
+            id = Column(Integer, primary_key=True, autoincrement=True)
+            tracked_search_id = Column(String(36), ForeignKey("tracked_searches.id"), nullable=False, index=True)
+            checked_at = Column(DateTime, nullable=False)
+            best_price = Column(Numeric(10, 2), nullable=False)
+            currency = Column(String(3), nullable=False)
+            tracked_search = relationship("TrackedSearch", back_populates="snapshots")
+
+      FILE: backend/src/app/models/__init__.py  (update existing empty file)
+        Add: from app.models.tracked_search import TrackedSearch, PriceSnapshot
+
+      FILE: backend/tests/test_models.py  (new)
+        Test file for this task. Location: backend/tests/test_models.py
+
+    depends_on:
+      - t01
+    test_file: backend/tests/test_models.py
+
+  - id: t03
+    name: tracking-schemas
+    status: in-review
+    retry_count: 0
+    assigned_task_id: null
+    completed_at: "2026-03-30T00:00:00Z"
+    description: |
+      Implement all Pydantic schemas for the tracking API: request body for creating
+      a tracked search, and response shapes for tracked search objects and price history.
+      These schemas are used by the API route handlers (t04) and consumed by tests.
+    interfaces: |
+      FILE: backend/src/app/schemas/tracking.py  (new)
+        Must export: CreateTrackedSearchRequest, TrackedSearchResponse,
+                     PriceSnapshotResponse, PriceHistoryResponse
+
+        Imports needed:
+          from pydantic import BaseModel, EmailStr, Field
+          from typing import Literal, Optional
+          from datetime import date, datetime
+          from decimal import Decimal
+
+        class CreateTrackedSearchRequest(BaseModel):
+            origin: str = Field(..., pattern=r'^[A-Z]{3}$')
+            destination: str = Field(..., pattern=r'^[A-Z]{3}$')
+            trip_type: Literal['one_way', 'round_trip']
+            departure_date_from: date
+            departure_date_to: date
+            return_date_from: Optional[date] = None
+            return_date_to: Optional[date] = None
+            adults: int = Field(default=1, ge=1, le=9)
+            max_stops: Optional[int] = Field(default=None, ge=0, le=2)
+            threshold_price: Decimal = Field(..., gt=0)
+            alert_email: EmailStr
+
+        class PriceSnapshotResponse(BaseModel):
+            checked_at: datetime
+            best_price: Decimal
+            currency: str
+            model_config = {"from_attributes": True}
+
+        class TrackedSearchResponse(BaseModel):
+            id: str
+            client_id: str
+            origin: str
+            destination: str
+            trip_type: str
+            departure_date_from: date
+            departure_date_to: date
+            return_date_from: Optional[date]
+            return_date_to: Optional[date]
+            adults: int
+            max_stops: Optional[int]
+            threshold_price: Decimal
+            alert_email: str
+            created_at: datetime
+            is_active: bool
+            current_best_price: Optional[Decimal]
+            last_checked_at: Optional[datetime]
+            model_config = {"from_attributes": True}
+
+        class PriceHistoryResponse(BaseModel):
+            tracked_search_id: str
+            snapshots: list[PriceSnapshotResponse]
+
+      DEPENDENCY NOTE: EmailStr requires the 'email-validator' package.
+        Add to backend/pyproject.toml dependencies:
+          "email-validator>=2.0",
+          "sqlalchemy>=2.0",
+          "apscheduler>=3.10",
+        Run: cd backend && uv sync
+
+      FILE: backend/tests/test_tracking_schemas.py  (new)
+        Test file for this task. Location: backend/tests/test_tracking_schemas.py
+
+    depends_on: []
+    test_file: backend/tests/test_tracking_schemas.py
+
+  - id: t04
+    name: tracking-api-endpoints
+    status: pending
+    retry_count: 0
+    assigned_task_id: null
+    completed_at: null
+    description: |
+      Implement the four tracking REST API endpoints as a FastAPI APIRouter.
+      Update main.py to include the new router, register models for create_all,
+      and add a lifespan handler. All route handlers must be `def` (not async def)
+      consistent with ADR-001.
+    interfaces: |
+      FILE: backend/src/app/api/tracking.py  (new)
+        Must export: router (an APIRouter instance)
+
+        from fastapi import APIRouter, Depends, Header, HTTPException
+        from sqlalchemy.orm import Session
+        import uuid
+
+        from app.db import get_db
+        from app.models.tracked_search import TrackedSearch, PriceSnapshot
+        from app.schemas.tracking import (
+            CreateTrackedSearchRequest, TrackedSearchResponse,
+            PriceHistoryResponse, PriceSnapshotResponse
+        )
+
+        router = APIRouter(prefix="/api/v1", tags=["tracking"])
+
+        def get_client_id(x_client_id: str = Header(..., alias="X-Client-ID")) -> str:
+            """Validates that X-Client-ID is a valid UUID. Returns 400 if invalid."""
+            try:
+                uuid.UUID(x_client_id, version=4)
+            except (ValueError, AttributeError):
+                raise HTTPException(status_code=400, detail="X-Client-ID must be a valid UUID v4")
+            return x_client_id
+
+        Endpoint signatures (all are `def`, not `async def`):
+
+        @router.post("/tracked-searches", response_model=TrackedSearchResponse, status_code=201)
+        def create_tracked_search(
+            body: CreateTrackedSearchRequest,
+            client_id: str = Depends(get_client_id),
+            db: Session = Depends(get_db),
+        ) -> TrackedSearchResponse:
+            # Create TrackedSearch ORM model, commit, return TrackedSearchResponse
+            # current_best_price=None, last_checked_at=None on creation
+
+        @router.get("/tracked-searches", response_model=list[TrackedSearchResponse])
+        def list_tracked_searches(
+            client_id: str = Depends(get_client_id),
+            db: Session = Depends(get_db),
+        ) -> list[TrackedSearchResponse]:
+            # Query WHERE client_id=? AND is_active=True
+            # For each, get latest PriceSnapshot to populate current_best_price and last_checked_at
+            # Return list
+
+        @router.delete("/tracked-searches/{search_id}", status_code=204)
+        def delete_tracked_search(
+            search_id: str,
+            client_id: str = Depends(get_client_id),
+            db: Session = Depends(get_db),
+        ) -> None:
+            # Query WHERE id=? AND client_id=?; 404 if not found or client_id mismatch
+            # SET is_active=False, commit
+            # Return None (204)
+
+        @router.get("/tracked-searches/{search_id}/history", response_model=PriceHistoryResponse)
+        def get_price_history(
+            search_id: str,
+            client_id: str = Depends(get_client_id),
+            db: Session = Depends(get_db),
+        ) -> PriceHistoryResponse:
+            # Query WHERE id=? AND client_id=?; 404 if not found
+            # Query price_snapshots ORDER BY checked_at ASC
+            # Return PriceHistoryResponse
+
+      FILE: backend/src/app/main.py  (update existing)
+        Replace the module-level create_app() with a lifespan-based approach:
+
+        from contextlib import asynccontextmanager
+        from fastapi import FastAPI
+        from fastapi.middleware.cors import CORSMiddleware
+        from amadeus import ResponseError
+
+        from app.api.error_handlers import amadeus_exception_handler
+        from app.api.search import router as search_router
+        from app.api.tracking import router as tracking_router
+        from app.config import get_settings
+        from app.db import engine
+        import app.models.tracked_search  # noqa: F401 — registers models with Base
+
+        @asynccontextmanager
+        async def lifespan(app: FastAPI):
+            from app.db import Base
+            Base.metadata.create_all(bind=engine)
+            yield  # scheduler is added in t06; yield is sufficient here
+
+        def create_app() -> FastAPI:
+            settings = get_settings()
+            application = FastAPI(
+                title="Flight Price Tracker",
+                version="0.1.0",
+                lifespan=lifespan,
+            )
+            application.add_middleware(
+                CORSMiddleware,
+                allow_origins=settings.cors_origins.split(","),
+                allow_methods=["*"],
+                allow_headers=["*"],
+                allow_credentials=True,
+            )
+            application.include_router(search_router)
+            application.include_router(tracking_router)
+            application.add_exception_handler(ResponseError, amadeus_exception_handler)
+            return application
+
+        app = create_app()
+
+      IMPORTANT: The existing tests in backend/tests/ must still pass after this change.
+        The health, airports, and search endpoints must remain unchanged.
+
+      FILE: backend/tests/test_tracking_api.py  (new)
+        Test file for this task. Location: backend/tests/test_tracking_api.py
+        Tests must use pytest fixtures:
+          - A real in-memory SQLite test database (not mocked)
+          - Use TestClient from httpx (starlette.testclient)
+          - Override the get_db dependency to use the test database
+          - Test database created fresh for each test via pytest fixture
+        Required test coverage:
+          - POST /api/v1/tracked-searches returns 201 with correct body
+          - POST without X-Client-ID header returns 400
+          - POST with invalid UUID in X-Client-ID returns 400
+          - POST with invalid email returns 422
+          - POST with negative threshold_price returns 422
+          - GET /api/v1/tracked-searches returns only rows matching X-Client-ID
+          - GET returns current_best_price and last_checked_at from latest snapshot
+          - DELETE returns 204 and GET no longer includes the row
+          - DELETE on unknown ID returns 404
+          - DELETE with wrong client_id returns 404
+          - GET /api/v1/tracked-searches/{id}/history returns snapshots oldest-to-newest
+          - GET history with wrong client_id returns 404
+
+    depends_on:
+      - t01
+      - t02
+      - t03
+    test_file: backend/tests/test_tracking_api.py
+
+  - id: t05
+    name: email-service
+    status: pending
+    retry_count: 0
+    assigned_task_id: null
+    completed_at: null
+    description: |
+      Implement the email alert service using Python's standard library smtplib.
+      The service must not raise exceptions — all SMTP errors are caught and logged.
+      Tests mock smtplib to verify behavior without a real SMTP server.
+    interfaces: |
+      FILE: backend/src/app/services/email_service.py  (new)
+        Must export: send_price_alert
+
+        Function signature:
+          def send_price_alert(
+              to_address: str,
+              origin: str,
+              destination: str,
+              departure_date_from: date,
+              departure_date_to: date,
+              return_date_from: date | None,
+              return_date_to: date | None,
+              best_price: Decimal,
+              currency: str,
+              threshold_price: Decimal,
+              previous_best_price: Decimal | None = None,
+          ) -> None:
+
+        Behavior:
+          - Subject: f"Price alert: {origin} → {destination} now {currency}{best_price}"
+          - Body: plain text containing origin, destination, departure date range,
+            return date range (if round trip; omit if None), best_price, currency,
+            threshold_price. If previous_best_price is None, body says "A price has
+            been found" (first check). Otherwise says "The price has dropped".
+          - SMTP config read from get_settings():
+              smtp_host, smtp_port, smtp_username, smtp_password, smtp_from_address, smtp_use_tls
+          - If smtp_use_tls is True: use smtplib.SMTP_SSL(host, port)
+          - If smtp_use_tls is False: use smtplib.SMTP(host, port)
+          - If smtp_username AND smtp_password are set: call server.login(username, password)
+          - Use server as context manager (with statement)
+          - All exceptions from smtplib are caught; log at ERROR level with exc_info=True
+          - The function NEVER raises exceptions
+
+      FILE: backend/tests/test_email_service.py  (new)
+        Test file for this task. Location: backend/tests/test_email_service.py
+        Use unittest.mock.patch to mock smtplib.SMTP and smtplib.SMTP_SSL.
+        Required tests:
+          - send_price_alert calls SMTP with correct host and port (no TLS)
+          - send_price_alert calls SMTP_SSL when smtp_use_tls=True
+          - send_price_alert calls server.login() when username+password are set
+          - send_price_alert does NOT call login() when username is None
+          - Email subject matches "Price alert: {origin} → {destination} now {currency}{price}"
+          - Email body contains origin, destination, best_price, threshold_price
+          - Body uses "A price has been found" when previous_best_price is None
+          - Body uses "The price has dropped" when previous_best_price is set
+          - SMTP exception is caught and logged, function does not raise
+          - Return date range is included in body when return_date_from is not None
+          - Return date range is omitted from body when return_date_from is None
+
+    depends_on:
+      - t01
+    test_file: backend/tests/test_email_service.py
+
+  - id: t06
+    name: scheduler-service
+    status: pending
+    retry_count: 0
+    assigned_task_id: null
+    completed_at: null
+    description: |
+      Implement the APScheduler-based background scheduler that periodically checks
+      all active tracked searches, writes price snapshots, and triggers email alerts.
+      Update main.py to start/stop the scheduler in the lifespan handler.
+    interfaces: |
+      FILE: backend/src/app/services/scheduler.py  (new)
+        Must export: create_scheduler, check_all_tracked_searches, check_single_tracked_search
+
+        Imports:
+          from apscheduler.schedulers.background import BackgroundScheduler
+          from apscheduler.triggers.interval import IntervalTrigger
+          from decimal import Decimal
+          from datetime import datetime, timezone
+          import logging
+          from app.config import get_settings
+          from app.db import SessionLocal
+          from app.models.tracked_search import TrackedSearch, PriceSnapshot
+          from app.schemas.search import SearchRequest
+          from app.services.amadeus_client import get_amadeus_client
+          from app.services.flight_service import search_flights
+          from app.services.email_service import send_price_alert
+
+        logger = logging.getLogger(__name__)
+
+        def create_scheduler() -> BackgroundScheduler:
+            """Create APScheduler with a single recurring job."""
+            settings = get_settings()
+            scheduler = BackgroundScheduler()
+            scheduler.add_job(
+                check_all_tracked_searches,
+                trigger=IntervalTrigger(minutes=settings.scheduler_interval_minutes),
+                id="check_all_tracked_searches",
+                replace_existing=True,
+            )
+            return scheduler
+
+        def check_all_tracked_searches() -> None:
+            """Open a DB session, load all active tracked searches, check each one."""
+            db = SessionLocal()
+            try:
+                searches = db.query(TrackedSearch).filter(TrackedSearch.is_active == True).all()
+            finally:
+                db.close()
+            for ts in searches:
+                check_single_tracked_search(ts)
+
+        def check_single_tracked_search(ts: TrackedSearch) -> None:
+            """
+            Check one tracked search: run Amadeus search, write snapshot, send alert if needed.
+            All exceptions must be caught and logged — this function never raises.
+            """
+            db = SessionLocal()
+            try:
+                # 1. Build SearchRequest from ts fields
+                request = SearchRequest(
+                    origin=ts.origin,
+                    destination=ts.destination,
+                    trip_type=ts.trip_type,
+                    departure_date_from=ts.departure_date_from,
+                    departure_date_to=ts.departure_date_to,
+                    return_date_from=ts.return_date_from,
+                    return_date_to=ts.return_date_to,
+                    adults=ts.adults,
+                    max_stops=ts.max_stops,
+                )
+                # 2. Call search_flights (reuses FlightService + Amadeus SDK)
+                client = get_amadeus_client()
+                results = search_flights(request, client)
+
+                # 3. If no results, log warning and return
+                if not results:
+                    logger.warning("No results for tracked_search %s", ts.id)
+                    return
+
+                # 4. Find minimum price offer
+                best_offer = min(results, key=lambda o: float(o.price))
+                best_price = Decimal(best_offer.price)
+                currency = best_offer.currency
+
+                # 5. Get previous best price (most recent snapshot)
+                prev_snapshot = (
+                    db.query(PriceSnapshot)
+                    .filter(PriceSnapshot.tracked_search_id == ts.id)
+                    .order_by(PriceSnapshot.checked_at.desc())
+                    .first()
+                )
+                previous_best_price = Decimal(str(prev_snapshot.best_price)) if prev_snapshot else None
+
+                # 6. Write new snapshot
+                snapshot = PriceSnapshot(
+                    tracked_search_id=ts.id,
+                    checked_at=datetime.now(timezone.utc).replace(tzinfo=None),
+                    best_price=best_price,
+                    currency=currency,
+                )
+                db.add(snapshot)
+                db.commit()
+
+                # 7. Evaluate alert condition
+                # Alert if: price <= threshold AND (no prior snapshot OR price < previous)
+                threshold = Decimal(str(ts.threshold_price))
+                if best_price <= threshold and (
+                    previous_best_price is None or best_price < previous_best_price
+                ):
+                    send_price_alert(
+                        to_address=ts.alert_email,
+                        origin=ts.origin,
+                        destination=ts.destination,
+                        departure_date_from=ts.departure_date_from,
+                        departure_date_to=ts.departure_date_to,
+                        return_date_from=ts.return_date_from,
+                        return_date_to=ts.return_date_to,
+                        best_price=best_price,
+                        currency=currency,
+                        threshold_price=threshold,
+                        previous_best_price=previous_best_price,
+                    )
+            except Exception:
+                logger.error("check_single_tracked_search failed for %s", ts.id, exc_info=True)
+            finally:
+                db.close()
+
+      FILE: backend/src/app/main.py  (update — extend the lifespan from t04)
+        Update lifespan to start/stop scheduler:
+
+        @asynccontextmanager
+        async def lifespan(app: FastAPI):
+            from app.db import Base
+            from app.services.scheduler import create_scheduler
+            Base.metadata.create_all(bind=engine)
+            scheduler = create_scheduler()
+            scheduler.start()
+            app.state.scheduler = scheduler
+            yield
+            scheduler.shutdown(wait=False)
+
+        All other code in main.py remains identical to what t04 produced.
+
+      FILE: backend/tests/test_scheduler.py  (new)
+        Test file for this task. Location: backend/tests/test_scheduler.py
+        All tests mock Amadeus SDK and smtplib — do NOT make real HTTP calls.
+        Use a real in-memory SQLite database for DB operations.
+
+        Required tests:
+          - check_single_tracked_search writes a PriceSnapshot row when results are returned
+          - check_single_tracked_search writes NO snapshot when results are empty
+          - check_single_tracked_search calls send_price_alert when price <= threshold (first check, no prior snapshot)
+          - check_single_tracked_search calls send_price_alert when price < previous best AND price <= threshold
+          - check_single_tracked_search does NOT call send_price_alert when price > threshold
+          - check_single_tracked_search does NOT call send_price_alert when price <= threshold but NOT < previous best
+          - check_single_tracked_search catches exceptions from search_flights and does not raise
+          - check_single_tracked_search catches exceptions from send_price_alert and does not raise
+          - check_all_tracked_searches only processes is_active=True searches
+          - create_scheduler returns a BackgroundScheduler with the correct job registered
+
+    depends_on:
+      - t01
+      - t02
+      - t04
+      - t05
+    test_file: backend/tests/test_scheduler.py
+
+  - id: t07
+    name: frontend-types-and-client
+    status: in-review
+    retry_count: 0
+    assigned_task_id: null
+    completed_at: 2026-03-28T02:10:00Z
+    completed_at: null
+    description: |
+      Implement the TypeScript types for tracking data and the client-side utility
+      modules: client ID management and the tracking API functions. These are pure
+      TypeScript with no React — they can be implemented and tested without any
+      UI components.
+    interfaces: |
+      FILE: frontend/src/types/tracking.ts  (new)
+        Must export exactly these types (match the PRD section 5.5 exactly):
+
+        export interface TrackedSearch {
+          id: string;
+          client_id: string;
+          origin: string;
+          destination: string;
+          trip_type: 'one_way' | 'round_trip';
+          departure_date_from: string;
+          departure_date_to: string;
+          return_date_from: string | null;
+          return_date_to: string | null;
+          adults: number;
+          max_stops: number | null;
+          threshold_price: string;
+          alert_email: string;
+          created_at: string;
+          is_active: boolean;
+          current_best_price: string | null;
+          last_checked_at: string | null;
+        }
+
+        export interface PriceSnapshot {
+          checked_at: string;
+          best_price: string;
+          currency: string;
+        }
+
+        export interface PriceHistory {
+          tracked_search_id: string;
+          snapshots: PriceSnapshot[];
+        }
+
+        export interface CreateTrackedSearchRequest {
+          origin: string;
+          destination: string;
+          trip_type: 'one_way' | 'round_trip';
+          departure_date_from: string;
+          departure_date_to: string;
+          return_date_from: string | null;
+          return_date_to: string | null;
+          adults: number;
+          max_stops: number | null;
+          threshold_price: number;
+          alert_email: string;
+        }
+
+      FILE: frontend/src/api/client.ts  (new)
+        Must export: getClientId, getAuthHeaders
+
+        const CLIENT_ID_KEY = 'flight_tracker_client_id';
+
+        export function getClientId(): string {
+          let id = localStorage.getItem(CLIENT_ID_KEY);
+          if (!id) {
+            id = crypto.randomUUID();
+            localStorage.setItem(CLIENT_ID_KEY, id);
+          }
+          return id;
+        }
+
+        export function getAuthHeaders(): Record<string, string> {
+          return { 'X-Client-ID': getClientId() };
+        }
+
+      FILE: frontend/src/api/tracking.ts  (new)
+        Must export: createTrackedSearch, listTrackedSearches, deleteTrackedSearch, getPriceHistory
+
+        import { getAuthHeaders } from './client';
+        import type { TrackedSearch, PriceHistory, CreateTrackedSearchRequest } from '../types/tracking';
+
+        export async function createTrackedSearch(body: CreateTrackedSearchRequest): Promise<TrackedSearch> {
+          const res = await fetch('/api/v1/tracked-searches', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+            body: JSON.stringify(body),
+          });
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({})) as { detail?: string };
+            throw new Error(data.detail ?? `HTTP ${res.status}`);
+          }
+          return res.json() as Promise<TrackedSearch>;
+        }
+
+        export async function listTrackedSearches(): Promise<TrackedSearch[]> {
+          const res = await fetch('/api/v1/tracked-searches', {
+            headers: getAuthHeaders(),
+          });
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({})) as { detail?: string };
+            throw new Error(data.detail ?? `HTTP ${res.status}`);
+          }
+          return res.json() as Promise<TrackedSearch[]>;
+        }
+
+        export async function deleteTrackedSearch(id: string): Promise<void> {
+          const res = await fetch(`/api/v1/tracked-searches/${id}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders(),
+          });
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({})) as { detail?: string };
+            throw new Error(data.detail ?? `HTTP ${res.status}`);
+          }
+        }
+
+        export async function getPriceHistory(id: string): Promise<PriceHistory> {
+          const res = await fetch(`/api/v1/tracked-searches/${id}/history`, {
+            headers: getAuthHeaders(),
+          });
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({})) as { detail?: string };
+            throw new Error(data.detail ?? `HTTP ${res.status}`);
+          }
+          return res.json() as Promise<PriceHistory>;
+        }
+
+      FILE: frontend/src/__tests__/tracking-api.test.ts  (new)
+        Test file for this task. Location: frontend/src/__tests__/tracking-api.test.ts
+        Use vi.fn() to mock global fetch. Test each function with success and error paths.
+        Required tests:
+          - getClientId returns a UUID stored in localStorage
+          - getClientId returns the same UUID on subsequent calls
+          - getAuthHeaders returns object with X-Client-ID key
+          - createTrackedSearch sends POST with correct headers and body, returns TrackedSearch
+          - createTrackedSearch throws Error with detail message on non-OK response
+          - listTrackedSearches sends GET with X-Client-ID header, returns TrackedSearch[]
+          - listTrackedSearches throws on non-OK response
+          - deleteTrackedSearch sends DELETE with X-Client-ID header
+          - deleteTrackedSearch throws on non-OK response
+          - getPriceHistory sends GET to correct URL with X-Client-ID, returns PriceHistory
+
+    depends_on: []
+    test_file: frontend/src/__tests__/tracking-api.test.ts
+
+  - id: t08
+    name: frontend-routing-and-navbar
+    status: in-progress
+    retry_count: 0
+    assigned_task_id: null
+    completed_at: null
+    description: |
+      Add React Router v6 to the frontend. Update App.tsx to use BrowserRouter with
+      two routes (/ and /tracked). Add a NavBar component with navigation links.
+      Install react-router-dom and recharts npm packages as part of this task.
+    interfaces: |
+      PACKAGES TO INSTALL (run from frontend/ directory):
+        npm install react-router-dom@^6 recharts@^2
+        (Install both here so recharts is available for t10 without a separate install step)
+
+      FILE: frontend/src/components/NavBar/index.tsx  (new)
+        Named export: NavBar
+        Must use Link from react-router-dom (not <a> tags)
+
+        import { Link } from 'react-router-dom';
+
+        export function NavBar() {
+          return (
+            <nav>
+              <Link to="/">Search</Link>
+              <Link to="/tracked">My Tracked Searches</Link>
+            </nav>
+          );
+        }
+
+      FILE: frontend/src/components/NavBar/NavBar.test.tsx  (new)
+        Test file for NavBar. Must wrap with MemoryRouter for react-router-dom context.
+        Required tests:
+          - NavBar renders a link with text "Search" that points to "/"
+          - NavBar renders a link with text "My Tracked Searches" that points to "/tracked"
+
+      FILE: frontend/src/App.tsx  (update existing)
+        Replace current content with:
+
+        import { BrowserRouter, Routes, Route } from 'react-router-dom';
+        import { HomePage } from './pages/HomePage';
+        import { TrackedSearchesPage } from './pages/TrackedSearchesPage';
+        import { NavBar } from './components/NavBar';
+
+        export default function App() {
+          return (
+            <BrowserRouter>
+              <NavBar />
+              <Routes>
+                <Route path="/" element={<HomePage />} />
+                <Route path="/tracked" element={<TrackedSearchesPage />} />
+              </Routes>
+            </BrowserRouter>
+          );
+        }
+
+        NOTE: TrackedSearchesPage is imported here but implemented in t09.
+        Create a temporary stub in frontend/src/pages/TrackedSearchesPage.tsx:
+
+          export function TrackedSearchesPage() {
+            return <main><h1>My Tracked Searches</h1><p>Coming soon.</p></main>;
+          }
+
+        This stub will be replaced by t09. The stub is required so App.tsx compiles.
+
+      FILE: frontend/src/pages/TrackedSearchesPage.tsx  (stub — to be completed by t09)
+        Create the stub as shown above.
+
+      IMPORTANT: The existing HomePage tests must still pass. Do NOT modify HomePage.tsx
+      or any existing test files. Wrap the HomePage in App.tsx routing only.
+
+    depends_on: []
+    test_file: frontend/src/components/NavBar/NavBar.test.tsx
+
+  - id: t09
+    name: frontend-tracked-searches-page
+    status: pending
+    retry_count: 0
+    assigned_task_id: null
+    completed_at: null
+    description: |
+      Implement the TrackedSearchesPage component that displays all tracked searches
+      for the current client, with loading/error/empty states, delete functionality,
+      and an expandable history accordion per row. This task replaces the stub created
+      in t08 with the real implementation.
+    interfaces: |
+      ASSUMED AVAILABLE (from other tasks — mock these in tests):
+        - listTrackedSearches() from src/api/tracking.ts (returns Promise<TrackedSearch[]>)
+        - deleteTrackedSearch(id) from src/api/tracking.ts (returns Promise<void>)
+        - getPriceHistory(id) from src/api/tracking.ts (returns Promise<PriceHistory>)
+        - TrackedSearch, PriceHistory types from src/types/tracking.ts
+        - TrackedSearchRow component from src/components/TrackedSearchRow/index.tsx
+          (implemented in this task)
+
+      FILE: frontend/src/components/TrackedSearchRow/index.tsx  (new)
+        Named export: TrackedSearchRow
+
+        interface TrackedSearchRowProps {
+          search: TrackedSearch;
+          onDeleted: (id: string) => void;
+        }
+
+        Component state:
+          - expanded: boolean (default false) — controls history accordion
+          - history: PriceHistory | null — loaded when first expanded
+          - historyStatus: 'idle' | 'loading' | 'error' (default 'idle')
+          - deleteError: string | null (default null)
+
+        Rendering (when not expanded):
+          One table row or div showing:
+            - "{origin} → {destination}"
+            - Trip type badge: "One Way" or "Round Trip"
+            - Departure: "{departure_date_from} to {departure_date_to}"
+            - Return dates only if trip_type === 'round_trip'
+            - Alert threshold: formatted as "{currency symbol}{threshold_price}"
+              Use "$" for USD, "€" for EUR, "£" for GBP, fallback to the currency code.
+            - Current best price: search.current_best_price ?? "–"
+            - Last checked: search.last_checked_at formatted as date string, or "Never" if null
+            - "History" button (aria-expanded={expanded})
+            - "Delete" button
+
+        Delete behavior:
+          - Call window.confirm("Delete this tracked search?")
+          - On confirm: call deleteTrackedSearch(search.id)
+          - On success: call onDeleted(search.id)
+          - On error: set deleteError to error message
+
+        History expand behavior:
+          - Toggle expanded on "History" button click
+          - When expanding for the first time (history === null): call getPriceHistory(search.id)
+            Set historyStatus='loading', then on success set history and historyStatus='idle',
+            on error set historyStatus='error'
+          - When expanded: render a div below the row containing PriceHistoryChart
+            (import PriceHistoryChart from ../PriceHistoryChart)
+          - If historyStatus === 'loading': show "Loading history..."
+          - If historyStatus === 'error': show "Failed to load history."
+
+      FILE: frontend/src/components/TrackedSearchRow/TrackedSearchRow.test.tsx  (new)
+        Required tests:
+          - Renders origin, destination, trip type, departure dates
+          - Shows "–" for current_best_price when null
+          - Shows "Never" for last_checked_at when null
+          - Delete button calls window.confirm; on confirm calls deleteTrackedSearch
+          - onDeleted callback called after successful delete
+          - Delete error shown inline when API throws
+          - History button toggles expanded state
+          - When expanded, calls getPriceHistory and renders PriceHistoryChart
+          - Shows "Loading history..." while getPriceHistory is in flight
+          - Shows "Failed to load history." on getPriceHistory error
+
+      FILE: frontend/src/pages/TrackedSearchesPage.tsx  (replace stub from t08)
+        Named export: TrackedSearchesPage
+
+        State:
+          - searches: TrackedSearch[] (default [])
+          - status: 'loading' | 'success' | 'error' (default 'loading')
+          - errorMessage: string (default '')
+
+        On mount: call listTrackedSearches(), set state accordingly.
+
+        Rendering:
+          - status === 'loading': render <p>Loading...</p>
+          - status === 'error': render <p role="alert">{errorMessage}</p>
+          - status === 'success' && searches.length === 0: render <p>No tracked searches yet.</p>
+          - status === 'success' && searches.length > 0: render list of TrackedSearchRow
+            Pass onDeleted={(id) => setSearches(prev => prev.filter(s => s.id !== id))}
+
+      FILE: frontend/src/pages/TrackedSearchesPage.test.tsx  (new)
+        Required tests:
+          - Shows "Loading..." on mount
+          - Shows error message when listTrackedSearches rejects
+          - Shows "No tracked searches yet." when list is empty
+          - Renders a row for each tracked search returned
+          - Removing a search via onDeleted removes it from the list
+
+    depends_on:
+      - t07
+      - t08
+    test_file: frontend/src/pages/TrackedSearchesPage.test.tsx
+
+  - id: t10
+    name: frontend-price-history-chart
+    status: pending
+    retry_count: 0
+    assigned_task_id: null
+    completed_at: null
+    description: |
+      Implement the PriceHistoryChart component using Recharts. The component renders
+      a line chart of price snapshots over time, handling 0, 1, and many data points.
+      recharts npm package is installed by t08.
+    interfaces: |
+      ASSUMED AVAILABLE:
+        - recharts package (installed by t08 — do NOT install it again)
+        - PriceSnapshot type from src/types/tracking.ts
+
+      FILE: frontend/src/components/PriceHistoryChart/index.tsx  (new)
+        Named export: PriceHistoryChart
+
+        import {
+          LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Dot
+        } from 'recharts';
+        import type { PriceSnapshot } from '../../types/tracking';
+
+        interface PriceHistoryChartProps {
+          snapshots: PriceSnapshot[];
+        }
+
+        Data transformation (before rendering):
+          const chartData = snapshots.map(s => ({
+            date: s.checked_at.slice(0, 10),  // "YYYY-MM-DD"
+            price: parseFloat(s.best_price),
+          }));
+
+        Rendering:
+          - If snapshots.length === 0: return <p>No price data yet.</p>
+          - Otherwise: render a ResponsiveContainer (width="100%" height={300}) wrapping LineChart
+            - XAxis: dataKey="date"
+            - YAxis: dataKey="price"
+            - CartesianGrid strokeDasharray="3 3"
+            - Tooltip
+            - Legend
+            - Line: type="monotone" dataKey="price" dot={true}
+              (dot={true} ensures single data points are visible as a dot)
+
+      FILE: frontend/src/components/PriceHistoryChart/PriceHistoryChart.test.tsx  (new)
+        Required tests:
+          - Renders "No price data yet." when snapshots is empty array
+          - Renders a chart container (not the empty message) when snapshots has 1 item
+          - Renders a chart container when snapshots has 10 items
+          - Does not crash with 0, 1, or 10 data points
+
+        NOTE: Recharts uses SVG which may not render fully in jsdom. Use a simple
+        existence check (e.g., check that "No price data yet." is NOT present when
+        snapshots.length > 0, and that a container element IS present). Do not assert
+        on SVG internals.
+
+    depends_on:
+      - t07
+      - t08
+    test_file: frontend/src/components/PriceHistoryChart/PriceHistoryChart.test.tsx
+
+  - id: t11
+    name: frontend-track-button-modal
+    status: pending
+    retry_count: 0
+    assigned_task_id: null
+    completed_at: null
+    description: |
+      Implement the "Track this search" button and modal that appears on the HomePage
+      after a successful search. Update HomePage to include the button and pass search
+      context to it. This task does NOT modify SearchForm, ResultsList, or PriceGrid.
+    interfaces: |
+      ASSUMED AVAILABLE (mock in tests):
+        - createTrackedSearch() from src/api/tracking.ts
+        - SearchParams type from src/types/flight.ts
+        - TrackedSearch type from src/types/tracking.ts
+        - FlightOfferResponse type from src/types/flight.ts
+
+      FILE: frontend/src/components/TrackButton/index.tsx  (new)
+        Named export: TrackButton
+
+        interface TrackButtonProps {
+          searchParams: SearchParams;
+          currency: string;  // from first result's currency field, default 'USD'
+        }
+
+        Component state:
+          - isTracking: boolean (default false) — true after successful save
+          - modalOpen: boolean (default false)
+          - email: string (default '')
+          - threshold: string (default '')
+          - formError: string | null (default null)
+          - submitting: boolean (default false)
+
+        If isTracking is true:
+          Render: <button disabled>Tracking</button>
+
+        If isTracking is false:
+          Render: <button onClick={() => setModalOpen(true)}>Track this search</button>
+
+        Modal (rendered when modalOpen is true):
+          - A div with role="dialog" and aria-modal="true"
+          - Read-only search summary: origin code, destination code, trip type,
+            departure date range. Use searchParams.origin?.iata_code and
+            searchParams.destination?.iata_code (both may be null — show '' if null)
+          - "Alert email" label + text input (type="email"), value=email
+          - "Price threshold ({currency})" label + number input (type="number", min="0.01", step="0.01"), value=threshold
+          - "Save" button (disabled when submitting)
+          - "Cancel" button (onClick: close modal, reset form state)
+          - If formError: render <p role="alert">{formError}</p>
+
+        Validation on Save click (before calling API):
+          1. email must match /^[^\s@]+@[^\s@]+\.[^\s@]+$/ — if not: setFormError("Please enter a valid email address")
+          2. threshold must parse as a positive number (parseFloat(threshold) > 0) — if not: setFormError("Please enter a price greater than 0")
+          3. If both valid: proceed
+
+        On Save (after validation passes):
+          - Set submitting=true, formError=null
+          - Build CreateTrackedSearchRequest from searchParams:
+              origin: searchParams.origin?.iata_code ?? '',
+              destination: searchParams.destination?.iata_code ?? '',
+              trip_type: searchParams.trip_type,
+              departure_date_from: searchParams.departure_date_from,
+              departure_date_to: searchParams.departure_date_to,
+              return_date_from: searchParams.return_date_from || null,
+              return_date_to: searchParams.return_date_to || null,
+              adults: searchParams.adults,
+              max_stops: searchParams.max_stops,
+              threshold_price: parseFloat(threshold),
+              alert_email: email,
+          - Call createTrackedSearch(body)
+          - On success: setModalOpen(false), setIsTracking(true), reset form state
+          - On error: setFormError(error.message), set submitting=false
+          - In finally: set submitting=false
+
+      FILE: frontend/src/components/TrackButton/TrackButton.test.tsx  (new)
+        Required tests:
+          - Renders "Track this search" button when not tracking
+          - Clicking button opens modal (dialog is visible)
+          - Cancel button closes modal
+          - Shows validation error when email is empty on Save
+          - Shows validation error when threshold is 0 or negative on Save
+          - Shows validation error when email is invalid format on Save
+          - Calls createTrackedSearch with correct body on valid submit
+          - After successful save, modal closes and button becomes disabled "Tracking"
+          - Shows API error message inside modal on createTrackedSearch rejection
+          - Does not close modal on API error
+
+      FILE: frontend/src/pages/HomePage.tsx  (update existing)
+        Add TrackButton below the view toggle buttons, shown only when status === 'success' AND results.length > 0.
+        The currency comes from results[0].currency (or 'USD' if results is empty).
+
+        Add import: import { TrackButton } from '../components/TrackButton';
+
+        In the JSX, after the view toggle div (the existing List/Grid buttons div):
+          {status === 'success' && results.length > 0 && (
+            <TrackButton
+              searchParams={searchParams}
+              currency={results[0]?.currency ?? 'USD'}
+            />
+          )}
+
+        Also add to state: const [searchParams, setSearchParams] = useState<SearchParams | null>(null);
+        Update handleSearch to: setSearchParams(params); (in addition to existing logic)
+
+        IMPORTANT: The existing 4 HomePage tests must still pass. Do NOT change
+        any rendering logic for SearchForm, ResultsList, PriceGrid, or the view toggle.
+        Only add the TrackButton rendering and the searchParams state variable.
+
+    depends_on:
+      - t07
+      - t08
+    test_file: frontend/src/components/TrackButton/TrackButton.test.tsx

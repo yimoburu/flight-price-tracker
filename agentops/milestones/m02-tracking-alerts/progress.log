@@ -1,0 +1,3 @@
+2026-03-30T00:00:00Z [DEV:t03] started
+2026-03-30T00:00:00Z [DEV:t03] finished: tracking Pydantic schemas (CreateTrackedSearchRequest, TrackedSearchResponse, PriceSnapshotResponse, PriceHistoryResponse) + email-validator dep; 28 new tests, 91 total passing
+2026-03-30T16:56:40Z [DEV:t08] started
