@@ -60,10 +60,10 @@ tasks:
 
   - id: t02
     name: db-models
-    status: pending
+    status: in-review
     retry_count: 0
     assigned_task_id: null
-    completed_at: null
+    completed_at: 2026-03-30T18:45:00Z
     description: |
       Implement the TrackedSearch and PriceSnapshot SQLAlchemy ORM models.
       These define the two new database tables. The models module must be importable
@@ -195,10 +195,10 @@ tasks:
 
   - id: t04
     name: tracking-api-endpoints
-    status: pending
+    status: in-review
     retry_count: 0
     assigned_task_id: null
-    completed_at: null
+    completed_at: 2026-03-28T00:30:00Z
     description: |
       Implement the four tracking REST API endpoints as a FastAPI APIRouter.
       Update main.py to include the new router, register models for create_all,
@@ -343,10 +343,10 @@ tasks:
 
   - id: t05
     name: email-service
-    status: pending
+    status: in-review
     retry_count: 0
     assigned_task_id: null
-    completed_at: null
+    completed_at: 2026-03-28T00:00:00Z
     description: |
       Implement the email alert service using Python's standard library smtplib.
       The service must not raise exceptions — all SMTP errors are caught and logged.
@@ -407,7 +407,7 @@ tasks:
 
   - id: t06
     name: scheduler-service
-    status: pending
+    status: in-progress
     retry_count: 0
     assigned_task_id: null
     completed_at: null
@@ -724,10 +724,10 @@ tasks:
 
   - id: t08
     name: frontend-routing-and-navbar
-    status: in-progress
+    status: in-review
     retry_count: 0
     assigned_task_id: null
-    completed_at: null
+    completed_at: 2026-03-28T09:57:50Z
     description: |
       Add React Router v6 to the frontend. Update App.tsx to use BrowserRouter with
       two routes (/ and /tracked). Add a NavBar component with navigation links.
@@ -798,10 +798,10 @@ tasks:
 
   - id: t09
     name: frontend-tracked-searches-page
-    status: pending
+    status: in-review
     retry_count: 0
     assigned_task_id: null
-    completed_at: null
+    completed_at: 2026-04-01T13:30:00Z
     description: |
       Implement the TrackedSearchesPage component that displays all tracked searches
       for the current client, with loading/error/empty states, delete functionality,
@@ -904,10 +904,10 @@ tasks:
 
   - id: t10
     name: frontend-price-history-chart
-    status: pending
+    status: in-review
     retry_count: 0
     assigned_task_id: null
-    completed_at: null
+    completed_at: 2026-03-28T09:51:30Z
     description: |
       Implement the PriceHistoryChart component using Recharts. The component renders
       a line chart of price snapshots over time, handling 0, 1, and many data points.
@@ -965,10 +965,10 @@ tasks:
 
   - id: t11
     name: frontend-track-button-modal
-    status: pending
+    status: in-review
     retry_count: 0
     assigned_task_id: null
-    completed_at: null
+    completed_at: 2026-03-28T17:48:00Z
     description: |
       Implement the "Track this search" button and modal that appears on the HomePage
       after a successful search. Update HomePage to include the button and pass search

@@ -1,3 +1,19 @@
 2026-03-30T00:00:00Z [DEV:t03] started
 2026-03-30T00:00:00Z [DEV:t03] finished: tracking Pydantic schemas (CreateTrackedSearchRequest, TrackedSearchResponse, PriceSnapshotResponse, PriceHistoryResponse) + email-validator dep; 28 new tests, 91 total passing
 2026-03-30T16:56:40Z [DEV:t08] started
+2026-03-30T16:58:02Z [DEV:t08] finished: NavBar component + TrackedSearchesPage stub + BrowserRouter routing in App.tsx; 62 tests passing (2 new NavBar tests)
+2026-03-28T00:00:00Z [DEV:t02] started
+2026-03-28T00:00:00Z [DEV:t09] started
+2026-03-28T02:10:00Z [DEV:t10] started
+2026-03-28T02:15:00Z [DEV:t11] started
+2026-03-30T18:38:34Z [DEV:t02] started
+2026-03-30T18:45:00Z [DEV:t02] finished: implemented TrackedSearch and PriceSnapshot ORM models, 14 tests all passing
+2026-03-31T16:45:53Z [DEV:t05] started
+2026-03-31T16:49:05Z [DEV:t05] finished: email_service.py with send_price_alert(), 11 tests all passing
+2026-03-31T16:49:57Z [DEV:t10] started
+2026-03-31T20:17:50Z [DEV:t10] finished: PriceHistoryChart component with Recharts + ResizeObserver mock, 8 tests passing
+2026-03-28T02:30:00Z [DEV:t09] started
+2026-04-01T13:30:00Z [DEV:t09] finished: TrackedSearchRow + TrackedSearchesPage — 18 tests passing (13 row + 5 page)
+2026-03-28T00:00:00Z [DEV:t04] started
+2026-03-28T00:30:00Z [DEV:t04] finished: tracking REST API endpoints (POST/GET/DELETE/history) with lifespan handler and 13 integration tests all passing
+2026-03-28T00:00:00Z [DEV:t06] started

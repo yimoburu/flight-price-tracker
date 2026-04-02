@@ -15,9 +15,14 @@ from app.db import engine
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from app.db import Base
+    from app.services.scheduler import create_scheduler
 
     Base.metadata.create_all(bind=engine)
+    scheduler = create_scheduler()
+    scheduler.start()
+    app.state.scheduler = scheduler
     yield
+    scheduler.shutdown(wait=False)
 
 
 def create_app() -> FastAPI:
