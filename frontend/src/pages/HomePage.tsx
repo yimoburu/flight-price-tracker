@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { SearchForm } from '../components/SearchForm';
 import { ResultsList } from '../components/ResultsList';
 import { PriceGrid } from '../components/PriceGrid';
+import { TrackButton } from '../components/TrackButton';
 import { searchFlights } from '../api/search';
 import type { SearchParams } from '../types/flight';
 import type { FlightOfferResponse } from '../types/flight';
@@ -12,6 +13,7 @@ export function HomePage() {
   const [errorMessage, setErrorMessage] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [tripType, setTripType] = useState<'one_way' | 'round_trip'>('one_way');
+  const [searchParams, setSearchParams] = useState<SearchParams | null>(null);
 
   async function handleSearch(params: SearchParams) {
     setStatus('loading');
@@ -19,6 +21,7 @@ export function HomePage() {
     setErrorMessage('');
     // extract tripType from params for PriceGrid
     setTripType(params.trip_type);
+    setSearchParams(params);
     try {
       const data = await searchFlights(params);
       setStatus('success');
@@ -38,6 +41,12 @@ export function HomePage() {
           <button onClick={() => setViewMode('list')} aria-pressed={viewMode === 'list'}>List</button>
           <button onClick={() => setViewMode('grid')} aria-pressed={viewMode === 'grid'}>Grid</button>
         </div>
+      )}
+      {status === 'success' && results.length > 0 && (
+        <TrackButton
+          searchParams={searchParams!}
+          currency={results[0]?.currency ?? 'USD'}
+        />
       )}
       {viewMode === 'list' || status !== 'success'
         ? <ResultsList status={status} results={results} errorMessage={errorMessage} />
