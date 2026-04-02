@@ -21,8 +21,8 @@ def _valid_one_way(**overrides) -> dict:
         "origin": "JFK",
         "destination": "LAX",
         "trip_type": "one_way",
-        "departure_date_from": "2026-04-01",
-        "departure_date_to": "2026-04-15",
+        "departure_date_from": "2026-06-01",
+        "departure_date_to": "2026-06-15",
         "adults": 1,
     }
     base.update(overrides)
@@ -35,10 +35,10 @@ def _valid_round_trip(**overrides) -> dict:
         "origin": "JFK",
         "destination": "LAX",
         "trip_type": "round_trip",
-        "departure_date_from": "2026-04-01",
-        "departure_date_to": "2026-04-15",
-        "return_date_from": "2026-04-20",
-        "return_date_to": "2026-04-30",
+        "departure_date_from": "2026-06-01",
+        "departure_date_to": "2026-06-15",
+        "return_date_from": "2026-06-20",
+        "return_date_to": "2026-06-30",
         "adults": 1,
     }
     base.update(overrides)
@@ -92,7 +92,7 @@ def test_departure_in_past_rejects() -> None:
 def test_departure_range_over_30_days_rejects() -> None:
     with pytest.raises(ValidationError):
         SearchRequest(**_valid_one_way(
-            departure_date_from="2026-04-01",
+            departure_date_from="2026-06-01",
             departure_date_to="2026-05-15",
         ))
 
@@ -116,8 +116,8 @@ def test_round_trip_missing_return_dates_rejects() -> None:
 def test_round_trip_return_range_over_30_days_rejects() -> None:
     with pytest.raises(ValidationError):
         SearchRequest(**_valid_round_trip(
-            return_date_from="2026-04-01",
-            return_date_to="2026-05-15",
+            return_date_from="2026-08-01",
+            return_date_to="2026-09-15",
         ))
 
 
@@ -148,9 +148,9 @@ def test_segment_info_parses() -> None:
         airline="BA",
         flight_number="BA 123",
         departure_airport="LHR",
-        departure_time="2026-04-01T10:00:00",
+        departure_time="2026-06-01T10:00:00",
         arrival_airport="JFK",
-        arrival_time="2026-04-01T13:00:00",
+        arrival_time="2026-06-01T13:00:00",
         duration="PT7H",
         stops=0,
     )
@@ -163,9 +163,9 @@ def test_flight_offer_response_parses() -> None:
         airline="BA",
         flight_number="BA 123",
         departure_airport="LHR",
-        departure_time="2026-04-01T10:00:00",
+        departure_time="2026-06-01T10:00:00",
         arrival_airport="JFK",
-        arrival_time="2026-04-01T13:00:00",
+        arrival_time="2026-06-01T13:00:00",
         duration="PT7H",
         stops=0,
     )
