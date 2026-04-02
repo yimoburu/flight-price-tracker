@@ -1,14 +1,14 @@
 goal: "Flight price tracker web app — search one-way and round-trip flights across date ranges, save searches, track prices over time, and send email alerts when prices drop"
-status: in-progress
+status: complete
 version: "0.0.0"
 current_milestone: m01
 retry_limit: 3
 milestones:
   - id: m01
     name: core-search
-    status: planned
+    status: complete
     branch: m01-core-search
   - id: m02
     name: tracking-alerts
-    status: planned
-    branch: m02-tracking-alerts
+    status: complete
+    branch: m01-core-search

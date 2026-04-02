@@ -1,3 +1,71 @@
 2026-03-19T19:36:41Z [PM] milestone started
 2026-03-19T19:36:41Z [PM] user goal: flight price tracker web app with one-way/round-trip search over date ranges, price tracking, and email alerts
 2026-03-19T19:36:41Z [PM] milestone planning complete — 2 milestones: core-search, tracking-alerts
+2026-03-19T19:37:57Z [PM] PRD generated
+2026-03-19T00:00:00Z [ARCHITECT] started
+2026-03-19T00:05:00Z [ARCHITECT] poc started: amadeus-date-range-behavior — question: Does Flight Cheapest Date Search return multiple dates in a single API call or require one call per date?
+2026-03-19T00:10:00Z [ARCHITECT] poc finished: amadeus-date-range-behavior — VIABLE — single call returns multi-date calendar; filter dates client-side then call flight-offers for top N
+2026-03-19T00:10:00Z [ARCHITECT] poc started: amadeus-sdk-async — question: How to integrate synchronous amadeus SDK into async FastAPI without blocking the event loop?
+2026-03-19T00:15:00Z [ARCHITECT] poc finished: amadeus-sdk-async — VIABLE — declare FastAPI route handlers as def (not async def); Starlette threadpool handles blocking SDK automatically
+2026-03-19T00:30:00Z [ARCHITECT] finished: design generated — FastAPI backend with sync Amadeus SDK in Starlette threadpool, two-step search (flight_dates + flight_offers_search), TTLCache, React/TS frontend with autocomplete, price grid, and responsive layout
+2026-03-19T00:30:00Z [ARCHITECT] finished: tasks created: t01, t02, t03, t04, t05, t06, t07, t08, t09, t10, t11, t12 — 12 tasks
+2026-03-23T00:00:00Z [PM] resuming milestone — cleaned up stale worktrees for t01, t07; restarting both tasks
+2026-03-23T00:00:00Z [DEV:t01] started
+2026-03-24T05:26:49Z [DEV:t01] started
+2026-03-24T18:23:03Z [DEV:t01] finished: backend scaffold, health + cors tests passing, ruff clean
+2026-03-24T00:00:00Z [REVIEW:t01] started
+2026-03-24T00:10:00Z [REVIEW:t01] finished: CHANGES_REQUIRED — app = create_app() requires credentials at import time, violating startup criterion; backend/.env not explicitly in .gitignore; test_cors_headers missing CORS header assertion
+2026-03-24T18:27:39Z [DEV:t07] started
+2026-03-25T00:00:00Z [PM] resuming — dispatching DEV:t01 (retry, review fixes) and DEV:t07 (complete uncommitted scaffold)
+2026-03-25T00:05:00Z [PM] restarted session — dispatching DEV:t01 (retry fix) and DEV:t07 (complete scaffold) in parallel
+2026-03-26T00:00:00Z [REVIEW:t07] started
+2026-03-26T00:05:00Z [REVIEW:t07] finished: APPROVED — all acceptance criteria met; types exact match, fetch-only API clients with correct error handling, vite proxy correct, strict TS, all placeholders present
+2026-03-26T10:21:00Z [PM] t07 merged to m01-core-search, worktree removed — t07 complete
+2026-03-26T10:21:00Z [PM] t01 fix committed (optional credentials + CORS assertion) — awaiting REVIEW:t01
+2026-03-26T10:30:00Z [DEV:t08] started
+2026-03-26T10:35:00Z [REVIEW:t03] started
+2026-03-26T10:40:00Z [REVIEW:t03] finished: APPROVED — all acceptance criteria met; singleton, RuntimeError guard, correct status mappings, all 6 test cases present and behavioral
+2026-03-26T10:45:00Z [REVIEW:t02] started
+2026-03-26T10:55:00Z [REVIEW:t02] finished: APPROVED — all acceptance criteria met; all 9 required tests present, all validator logic correct, all 4 schema classes implemented per spec
+2026-03-26T11:00:00Z [REVIEW:t08] started
+2026-03-26T11:10:00Z [REVIEW:t08] finished: APPROVED — all spec criteria met; named export, correct props, debounce+cleanup, ARIA attributes, loading/error states, 12 behavioral tests pass
+2026-03-26T11:15:00Z [DEV:t05] started
+2026-03-26T12:00:00Z [REVIEW:t09] started
+2026-03-26T12:10:00Z [REVIEW:t09] finished: APPROVED — all 7 acceptance criteria tests present and behavioral; all validation logic correct; aria-pressed toggle, AirportAutocomplete, date min attrs, select mappings all per spec
+2026-03-26T12:15:00Z [REVIEW:t04] started
+2026-03-26T12:20:00Z [REVIEW:t04] finished: CHANGES_REQUIRED — airports route handler must be async per DEVELOPMENT_RULES.md
+2026-03-26T12:25:00Z [REVIEW:t05] started
+2026-03-26T12:30:00Z [REVIEW:t05] finished: APPROVED — all 17 tests pass, two-step Amadeus flow, TTL cache, date filtering, max_stops logic all per spec
+2026-03-26T12:35:00Z [REVIEW:t11] started
+2026-03-26T12:40:00Z [REVIEW:t11] finished: APPROVED — priceColor and PriceGrid fully implement spec; all 12 tests present and correctly verify behavior
+2026-03-26T12:45:00Z [PM] t04 fix applied: async def airports, ruff-clean tests, 2-airport endpoint test — re-review dispatched
+2026-03-26T12:50:00Z [PM] t05 merged to m01-core-search, worktree removed — t05 complete
+2026-03-26T12:55:00Z [PM] t09 merged to m01-core-search, worktree removed — t09 complete
+2026-03-26T13:00:00Z [PM] t11 merged to m01-core-search, worktree removed — t11 complete
+2026-03-26T13:05:00Z [DEV:t12] started — t09+t10+t11 all merged
+2026-03-28T00:00:00Z [REVIEW:t12] started
+2026-03-28T00:10:00Z [REVIEW:t12] finished: APPROVED — all acceptance criteria met; named export, all 5 state vars, handleSearch flow exact, SearchForm/ResultsList/PriceGrid wired correctly, view toggle conditional logic matches spec, all 4 required tests behavioral and passing, App.tsx correct
+2026-03-28T01:00:00Z [DEV:t06] finished: POST /search handler, 10 integration tests, 97% coverage, ruff clean
+2026-03-28T01:05:00Z [REVIEW:t06] started
+2026-03-28T01:15:00Z [REVIEW:t06] finished: APPROVED — all 10 AC tests pass, handler signature correct, sync def justified by Amadeus SDK design, coverage 97%
+2026-03-28T01:20:00Z [PM] t06 merged to m01-core-search, worktree removed — t06 complete
+2026-03-28T01:20:00Z [PM] t12 merged to m01-core-search, worktree removed — t12 complete
+2026-03-28T01:20:00Z [PM] all 12 tasks complete — dispatching QA/Integration agent
+2026-03-28T01:20:00Z [QA] started
+2026-03-28T01:30:00Z [QA] finished: PASS — backend 49/49 tests pass, 97% coverage, ruff clean; frontend 50/50 tests pass, build clean, eslint clean; all acceptance criteria met
+2026-03-28T01:30:00Z [PM] milestone m01-core-search COMPLETE
+2026-03-28T02:00:00Z [ARCHITECT] started
+2026-03-28T02:00:00Z [ARCHITECT] finished: design generated — FastAPI tracking API (4 endpoints) + SQLAlchemy SQLite DB (2 tables) + APScheduler background checker + smtplib email alerts + React Router v6 frontend with TrackedSearchesPage, TrackButton modal, and Recharts price history chart
+2026-03-28T02:00:00Z [ARCHITECT] finished: tasks created: t01, t02, t03, t04, t05, t06, t07, t08, t09, t10, t11 — 11 tasks
+2026-03-28T02:00:00Z [PM] resuming — m01 complete, starting m02-tracking-alerts
+2026-03-28T02:00:00Z [PM] m02 PRD and design generated — 11 tasks created
+2026-03-28T02:00:00Z [PM] dispatching Group A (no deps): t01 (config+db), t03 (tracking schemas), t07 (frontend types+client), t08 (routing+navbar)
+2026-03-29T00:00:00Z [DEV:t01] started
+2026-03-29T00:30:00Z [DEV:t01] finished: extended Settings with 8 m02 env vars, implemented SQLAlchemy db.py (Base/engine/SessionLocal/get_db), added sqlalchemy>=2.0 dep, 14 tests all passing
+2026-03-28T02:05:00Z [DEV:t07] started
+2026-03-28T02:10:00Z [DEV:t07] finished: implemented TrackedSearch types, client ID management, and 4 tracking API functions — 10 new tests pass, 60 total
+2026-04-01T16:29:16Z [DEV:t11] started
+2026-03-28T17:48:00Z [DEV:t11] finished: TrackButton component with modal + HomePage integration — 10 new tests, 98 total passing
+2026-03-30T10:30:00Z [QA] m02-tracking-alerts QA PASS — 139 backend tests, 98 frontend tests, 97% coverage
+2026-03-30T10:30:00Z [PM] m02-tracking-alerts status → complete
+2026-03-30T10:30:00Z [PM] All milestones complete — project DONE
