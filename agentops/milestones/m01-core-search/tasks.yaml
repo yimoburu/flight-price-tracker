@@ -1,0 +1,1375 @@
+tasks:
+
+  - id: t01
+    name: backend-project-scaffold
+    status: in-progress
+    completed_at: 2026-03-24T07:15:00Z
+    description: |
+      Create the FastAPI backend project scaffold: directory structure, pyproject.toml,
+      config.py (pydantic-settings), main.py (FastAPI app with CORS and router
+      registration), and empty stub files for all modules so subsequent tasks have
+      importable targets.
+    interfaces: |
+      File layout to create:
+        backend/
+          pyproject.toml
+          src/
+            app/
+              __init__.py
+              main.py             # FastAPI app, CORS, lifespan, include_router
+              config.py           # Settings(BaseSettings) + get_settings()
+              db.py               # empty stub (used in m02)
+              api/
+                __init__.py
+                search.py         # router = APIRouter(prefix="/api/v1")
+                error_handlers.py # amadeus_exception_handler
+              models/
+                __init__.py       # empty stubs (used in m02)
+              schemas/
+                __init__.py
+                search.py         # SearchRequest, FlightOfferResponse, AirportResult, SegmentInfo
+              services/
+                __init__.py
+                amadeus_client.py # get_amadeus_client() singleton factory
+                flight_service.py # search_flights(), search_airports() stubs
+
+      config.py Settings class:
+        class Settings(BaseSettings):
+            model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8')
+            amadeus_client_id: str
+            amadeus_client_secret: str
+            amadeus_hostname: str = 'test'
+            cors_origins: str = 'http://localhost:5173'
+
+        @lru_cache
+        def get_settings() -> Settings: ...
+
+      main.py:
+        - app = FastAPI(title="Flight Price Tracker", version="0.1.0")
+        - CORSMiddleware with allow_origins=settings.cors_origins.split(',')
+        - app.include_router(search_router)
+        - app.add_exception_handler(ResponseError, amadeus_exception_handler)
+
+      pyproject.toml [project.dependencies]:
+        - "fastapi>=0.111.0"
+        - "uvicorn[standard]>=0.29.0"
+        - "amadeus>=9.0.0"
+        - "pydantic-settings>=2.2.0"
+        - "cachetools>=5.3.0"
+
+      pyproject.toml [project.optional-dependencies.dev]:
+        - "pytest>=8.0.0"
+        - "pytest-asyncio>=0.23.0"
+        - "httpx>=0.27.0"
+        - "ruff>=0.4.0"
+        - "black>=24.0.0"
+
+    acceptance_criteria: |
+      - `cd backend && uv run uvicorn src.app.main:app --reload --port 8000` starts
+        without errors (credentials not needed for startup — only for API calls).
+      - `GET http://localhost:8000/api/v1/health` returns 200 `{"status": "ok"}`.
+      - `uv run ruff check src/` reports no errors.
+      - All imports resolve; no circular imports.
+      - `backend/.env.example` file exists with AMADEUS_CLIENT_ID, AMADEUS_CLIENT_SECRET,
+        AMADEUS_HOSTNAME, CORS_ORIGINS keys (no real values).
+      - `backend/.env` is listed in `.gitignore` at project root.
+
+    implementation_guidelines: |
+      - Use `uv init` and then edit pyproject.toml, or create pyproject.toml manually.
+      - Use `uv add <package>` to add dependencies (or write pyproject.toml directly).
+      - Settings are loaded lazily: `Depends(get_settings)` in route handlers.
+        Use `@lru_cache` on `get_settings()` so settings are parsed once.
+      - CORSMiddleware: allow_origins should be a list; split `cors_origins` on comma.
+        Set allow_methods=["*"], allow_headers=["*"], allow_credentials=True.
+      - The Amadeus Client should NOT be instantiated at import time (credentials may
+        not be set in test environments). Use a factory function.
+      - All Python files must have type hints on all functions.
+      - Use `ruff` for linting with default config in pyproject.toml:
+        [tool.ruff]
+        line-length = 100
+        [tool.ruff.lint]
+        select = ["E", "F", "I"]
+      - Use `black` for formatting with line-length = 100.
+
+    dependencies: []
+
+    reference_docs: |
+      - FastAPI project structure: agentops/milestones/m01-core-search/research/fastapi_async_patterns.md
+      - pydantic-settings: https://docs.pydantic.dev/latest/concepts/pydantic_settings/
+      - uv docs: https://docs.astral.sh/uv/
+
+    status: complete
+    retry_count: 1
+    assigned_task_id: null
+    completed_at: 2026-03-26T00:00:00Z
+
+  - id: t02
+    name: pydantic-schemas
+    description: |
+      Implement all Pydantic v2 request/response schemas used by the search API.
+      These schemas must validate all inputs and serve as the contract between
+      route handlers and service layer.
+    interfaces: |
+      File: backend/src/app/schemas/search.py
+
+      from pydantic import BaseModel, Field, field_validator, model_validator
+      from datetime import date
+      from typing import Literal
+
+      class SearchRequest(BaseModel):
+          origin: str = Field(..., min_length=3, max_length=3)
+          destination: str = Field(..., min_length=3, max_length=3)
+          trip_type: Literal['one_way', 'round_trip']
+          departure_date_from: date
+          departure_date_to: date
+          return_date_from: date | None = None
+          return_date_to: date | None = None
+          adults: int = Field(default=1, ge=1, le=9)
+          max_stops: int | None = Field(default=None, ge=0, le=2)
+
+          @field_validator('origin', 'destination')
+          @classmethod
+          def must_be_iata(cls, v: str) -> str:
+              # Must be exactly 3 uppercase ASCII letters
+              ...
+
+          @model_validator(mode='after')
+          def validate_dates(self) -> 'SearchRequest':
+              # departure_date_from must not be in the past (today is ok)
+              # departure_date_to >= departure_date_from
+              # (departure_date_to - departure_date_from).days <= 30
+              # For round_trip: return_date_from and return_date_to must be present
+              # For round_trip: (return_date_to - return_date_from).days <= 30
+              # For round_trip: return_date_from >= departure_date_from
+              ...
+
+      class SegmentInfo(BaseModel):
+          airline: str              # e.g. "BA"
+          flight_number: str        # e.g. "BA 123"
+          departure_airport: str    # IATA code e.g. "LHR"
+          departure_time: str       # ISO datetime string "2024-11-01T10:30:00"
+          arrival_airport: str      # IATA code e.g. "JFK"
+          arrival_time: str         # ISO datetime string
+          duration: str             # ISO 8601 duration e.g. "PT7H30M"
+          stops: int                # 0 = nonstop
+
+      class FlightOfferResponse(BaseModel):
+          price: str               # e.g. "298.50"
+          currency: str            # e.g. "USD"
+          departure_date: date
+          return_date: date | None = None
+          outbound_segments: list[SegmentInfo]
+          return_segments: list[SegmentInfo] = []
+
+      class AirportResult(BaseModel):
+          iata_code: str
+          name: str
+          city: str
+          country: str
+
+    acceptance_criteria: |
+      Input/output test cases (must pass as pytest tests in tests/test_schemas.py):
+
+      Valid SearchRequest:
+        input: {origin: "JFK", destination: "LAX", trip_type: "one_way",
+                departure_date_from: "2026-04-01", departure_date_to: "2026-04-15",
+                adults: 2}
+        expected: model parses without error, origin == "JFK", adults == 2
+
+      IATA validation rejects lowercase:
+        input: {origin: "jfk", ...}
+        expected: ValidationError raised
+
+      IATA validation rejects 4-letter code:
+        input: {origin: "KJFK", ...}
+        expected: ValidationError raised (length constraint enforced by Field)
+
+      Departure in past rejects:
+        input: {departure_date_from: "2020-01-01", departure_date_to: "2020-01-10", ...}
+        expected: ValidationError raised
+
+      Date range > 30 days rejects:
+        input: {departure_date_from: "2026-04-01", departure_date_to: "2026-05-15", ...}
+        expected: ValidationError raised
+
+      Round-trip missing return dates rejects:
+        input: {trip_type: "round_trip", return_date_from: null, return_date_to: null, ...}
+        expected: ValidationError raised
+
+      Return range > 30 days rejects:
+        input: {trip_type: "round_trip", return_date_from: "2026-04-01",
+                return_date_to: "2026-05-15", ...}
+        expected: ValidationError raised
+
+      max_stops null passes (any stops allowed):
+        input: {max_stops: null, ...}
+        expected: model.max_stops is None
+
+      max_stops -1 rejects (ge=0):
+        input: {max_stops: -1, ...}
+        expected: ValidationError raised
+
+    implementation_guidelines: |
+      - Use Pydantic v2 syntax throughout (field_validator, model_validator, Field).
+      - IATA validator: use `re.match(r'^[A-Z]{3}$', v)` — uppercase letters only.
+        Must be exactly 3 characters (Field min_length/max_length handles length,
+        validator handles uppercase-alpha constraint).
+      - Date validators: use `from datetime import date; date.today()` for "not in past".
+        Use `.days` property on timedelta for range check.
+      - Do not import amadeus in schemas — schemas must be importable without credentials.
+      - All schema classes must be importable from `app.schemas.search`.
+
+    dependencies: [t01]
+
+    reference_docs: |
+      - Pydantic v2 validators: https://docs.pydantic.dev/latest/concepts/validators/
+      - Research: agentops/milestones/m01-core-search/research/amadeus_python_sdk.md
+
+    status: complete
+    retry_count: 0
+    assigned_task_id: null
+    completed_at: null
+
+  - id: t03
+    name: amadeus-client-and-error-handler
+    description: |
+      Implement the Amadeus Client singleton factory and the global FastAPI exception
+      handler that maps amadeus.ResponseError to appropriate HTTP status codes.
+    interfaces: |
+      File: backend/src/app/services/amadeus_client.py
+
+      from amadeus import Client
+      from app.config import get_settings
+      import functools
+
+      @functools.lru_cache(maxsize=1)
+      def get_amadeus_client() -> Client:
+          """Return a cached singleton Amadeus Client instance.
+
+          Called at first use (lazy init). Raises RuntimeError if credentials
+          are not configured.
+          """
+          settings = get_settings()
+          return Client(
+              client_id=settings.amadeus_client_id,
+              client_secret=settings.amadeus_client_secret,
+              hostname=settings.amadeus_hostname,
+          )
+
+      File: backend/src/app/api/error_handlers.py
+
+      from fastapi import Request
+      from fastapi.responses import JSONResponse
+      from amadeus import ResponseError
+
+      async def amadeus_exception_handler(request: Request, exc: ResponseError) -> JSONResponse:
+          """Map amadeus ResponseError to HTTP responses."""
+          ...
+          # status_code mapping:
+          # 401 -> 503 {"detail": "Invalid Amadeus API credentials."}
+          # 429 -> 429 {"detail": "Rate limit exceeded. Please wait 60 seconds before retrying."}
+          # 400 -> 422 {"detail": "Invalid search parameters: <exc message>"}
+          # 404 -> 200 with empty list (no results) -- NOTE: handled in service layer, not here
+          # 5xx -> 502 {"detail": "Flight data service temporarily unavailable."}
+          # other -> 500 {"detail": "Unexpected error."}
+
+    acceptance_criteria: |
+      Tests in tests/test_error_handlers.py using httpx TestClient:
+
+      When amadeus returns 429 (rate limit):
+        input: route raises ResponseError with mock response status_code=429
+        expected: HTTP 429, body contains "Rate limit exceeded"
+
+      When amadeus returns 401 (auth error):
+        input: route raises ResponseError with mock response status_code=401
+        expected: HTTP 503, body contains "credentials"
+
+      When amadeus returns 500 (server error):
+        input: route raises ResponseError with mock response status_code=500
+        expected: HTTP 502, body contains "temporarily unavailable"
+
+      When amadeus returns 400 (bad params):
+        input: route raises ResponseError with mock response status_code=400
+        expected: HTTP 422
+
+      get_amadeus_client() returns same instance on repeated calls:
+        input: call get_amadeus_client() twice
+        expected: both calls return same object (id(a) == id(b))
+
+      get_amadeus_client() uses correct hostname:
+        input: AMADEUS_HOSTNAME=test in env
+        expected: client.hostname == 'test'
+
+    implementation_guidelines: |
+      - `get_amadeus_client()` uses `@functools.lru_cache(maxsize=1)` — this is a
+        module-level singleton. Reset between tests using
+        `get_amadeus_client.cache_clear()`.
+      - For testing error_handlers: use `httpx.AsyncClient(app=app)` or
+        `TestClient(app)` with a route that deliberately raises ResponseError via monkeypatch.
+      - To construct a mock ResponseError for tests:
+        ```python
+        from unittest.mock import MagicMock
+        from amadeus import ResponseError
+        mock_response = MagicMock()
+        mock_response.status_code = 429
+        exc = ResponseError(mock_response)
+        ```
+      - The exception handler is registered in main.py:
+        `app.add_exception_handler(ResponseError, amadeus_exception_handler)`
+      - `amadeus_exception_handler` must be `async def` (FastAPI exception handler
+        signature requires it) even though no await is used inside.
+
+    dependencies: [t01]
+
+    reference_docs: |
+      - Amadeus SDK errors: agentops/milestones/m01-core-search/research/amadeus_python_sdk.md
+      - FastAPI exception handlers: https://fastapi.tiangolo.com/tutorial/handling-errors/
+
+    status: complete
+    retry_count: 0
+    assigned_task_id: null
+    completed_at: null
+
+  - id: t04
+    name: airport-search-service-and-endpoint
+    description: |
+      Implement the airport autocomplete service function and the
+      `GET /api/v1/airports?q={query}` endpoint.
+    interfaces: |
+      Service function in backend/src/app/services/flight_service.py:
+
+      from amadeus import Client, ResponseError, Location
+      from app.schemas.search import AirportResult
+
+      def search_airports(query: str, client: Client) -> list[AirportResult]:
+          """Search airports and cities by keyword.
+
+          Args:
+              query: search keyword, minimum 3 characters
+              client: Amadeus Client instance
+
+          Returns:
+              List of up to 10 AirportResult objects sorted by relevance
+              (Amadeus returns them pre-sorted).
+
+          Raises:
+              amadeus.ResponseError: propagated to caller (caught by exception handler)
+          """
+
+      Route handler in backend/src/app/api/search.py:
+
+      @router.get("/airports", response_model=list[AirportResult])
+      def airports(
+          q: str = Query(..., min_length=3, description="Airport/city search keyword"),
+          settings: Settings = Depends(get_settings),
+      ) -> list[AirportResult]:
+          client = get_amadeus_client()
+          return search_airports(q, client)
+
+    acceptance_criteria: |
+      Unit tests in tests/test_flight_service.py:
+
+      search_airports with mock client returning 2 airports:
+        input: query="LON", mock amadeus response with 2 location objects:
+          [{iataCode: "LHR", name: "Heathrow", address: {cityName: "London", countryName: "United Kingdom"}},
+           {iataCode: "LGW", name: "Gatwick",  address: {cityName: "London", countryName: "United Kingdom"}}]
+        expected: returns [AirportResult(iata_code="LHR", name="Heathrow", city="London", country="United Kingdom"),
+                           AirportResult(iata_code="LGW", name="Gatwick", city="London", country="United Kingdom")]
+
+      search_airports with empty response:
+        input: mock client returns []
+        expected: returns []
+
+      Integration test via TestClient:
+
+      GET /api/v1/airports?q=LO (too short):
+        expected: 422 (FastAPI Query min_length=3 validation)
+
+      GET /api/v1/airports?q=LON with mock amadeus returning 2 airports:
+        expected: 200, JSON array of 2 AirportResult objects
+
+    implementation_guidelines: |
+      - SDK call: `client.reference_data.locations.get(keyword=query, subType=Location.ANY, **{'page[limit]': 10})`
+        Note: `page[limit]` must be passed as a string key via `**{}` syntax because
+        square brackets are not valid Python kwarg names.
+      - Response data is in `response.data` — a list of dicts.
+      - Map response fields:
+          iata_code = item['iataCode']
+          name      = item['name']
+          city      = item.get('address', {}).get('cityName', '')
+          country   = item.get('address', {}).get('countryName', '')
+      - For unit tests, mock the amadeus client:
+        ```python
+        from unittest.mock import MagicMock
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.data = [{...}, {...}]
+        mock_client.reference_data.locations.get.return_value = mock_response
+        ```
+      - The `Location` import from amadeus: `from amadeus import Location`.
+        `Location.ANY` evaluates to the string `"AIRPORT,CITY"`.
+      - Do not hardcode "AIRPORT,CITY" — use `Location.ANY` for clarity and correctness.
+
+    dependencies: [t02, t03]
+
+    reference_docs: |
+      - Amadeus SDK airport search: agentops/milestones/m01-core-search/research/amadeus_python_sdk.md
+      - POC: agentops/milestones/m01-core-search/poc/amadeus-sdk-async.md
+
+    status: complete
+    retry_count: 1
+    assigned_task_id: null
+    completed_at: null
+
+  - id: t05
+    name: flight-search-service
+    description: |
+      Implement the core flight search business logic: two-step Amadeus API call
+      (cheapest dates calendar → flight offers), date range filtering, max_stops
+      filtering, result mapping, and in-memory TTL caching.
+    interfaces: |
+      File: backend/src/app/services/flight_service.py (extend from t04)
+
+      import threading
+      from cachetools import TTLCache
+      from amadeus import Client, ResponseError
+      from app.schemas.search import SearchRequest, FlightOfferResponse, SegmentInfo
+      from datetime import date
+
+      # Module-level cache: max 128 entries, 15-minute TTL
+      _cache: TTLCache = TTLCache(maxsize=128, ttl=900)
+      _cache_lock: threading.Lock = threading.Lock()
+
+      def search_flights(request: SearchRequest, client: Client) -> list[FlightOfferResponse]:
+          """Search for flight offers across a date range.
+
+          Algorithm:
+          1. Build cache key from request fields (all params as sorted tuple)
+          2. Return cached result if present (cache_lock acquired)
+          3. Call amadeus flight_dates.get() to get cheapest date calendar
+          4. Filter calendar entries to user's date window
+          5. For round_trip: also filter return_date within return window
+          6. Sort filtered entries by price ascending, take top 5
+          7. For each top-5 date (or date pair for round_trip):
+             Call flight_offers_search.get() with that specific date
+          8. Flatten all offers, apply max_stops filter if set
+          9. Sort by total price ascending
+          10. Map each offer to FlightOfferResponse
+          11. Store in cache
+          12. Return results
+
+          Args:
+              request: validated SearchRequest
+              client: Amadeus Client instance
+
+          Returns:
+              List of FlightOfferResponse sorted by price ascending.
+              Empty list if no results found.
+
+          Raises:
+              amadeus.ResponseError: propagated (caught by exception handler in main.py)
+          """
+
+      def _build_cache_key(request: SearchRequest) -> tuple:
+          """Build a hashable cache key from all search parameters."""
+          return (
+              request.origin, request.destination, request.trip_type,
+              str(request.departure_date_from), str(request.departure_date_to),
+              str(request.return_date_from), str(request.return_date_to),
+              request.adults, request.max_stops,
+          )
+
+      def _map_offer_to_response(offer: dict, trip_type: str) -> FlightOfferResponse:
+          """Map a raw Amadeus flight offer dict to FlightOfferResponse."""
+          # offer structure (Amadeus Flight Offers Search v2 response):
+          # offer['price']['grandTotal'] -> total price string
+          # offer['price']['currency']   -> currency code
+          # offer['itineraries']         -> list of itinerary objects
+          #   itinerary['segments']      -> list of segment objects
+          #     segment['departure']['iataCode']     -> departure airport
+          #     segment['departure']['at']           -> departure datetime string
+          #     segment['arrival']['iataCode']       -> arrival airport
+          #     segment['arrival']['at']             -> arrival datetime string
+          #     segment['carrierCode']               -> airline IATA code
+          #     segment['number']                    -> flight number
+          #     segment['duration']                  -> duration e.g. "PT7H30M"
+          #     segment['numberOfStops']             -> int stops en route
+          # For one_way: itineraries[0] = outbound only
+          # For round_trip: itineraries[0] = outbound, itineraries[1] = return
+
+    acceptance_criteria: |
+      Unit tests in tests/test_flight_service.py:
+
+      Cache hit returns cached result without calling amadeus:
+        setup: pre-populate cache with cache key for a given request
+        input: call search_flights() with same request
+        expected: amadeus client methods NOT called; cached result returned
+
+      Cache miss calls amadeus and stores result:
+        setup: empty cache, mock client
+        input: search_flights() with valid one_way request
+        expected: amadeus.shopping.flight_dates.get called once;
+                  amadeus.shopping.flight_offers_search.get called (up to 5 times);
+                  result stored in cache after call
+
+      Date range filter: only dates within window returned:
+        setup: mock flight_dates returns dates [2026-04-01, 2026-04-10, 2026-04-20, 2026-05-01]
+               request window: departure_date_from=2026-04-05, departure_date_to=2026-04-15
+        expected: only 2026-04-10 is passed to flight_offers_search
+
+      max_stops=0 filters out flights with stops:
+        setup: mock flight_offers returns 3 offers: [{stops:0}, {stops:1}, {stops:0}]
+               request.max_stops=0
+        expected: returned list has 2 offers (the nonstop ones)
+
+      max_stops=null returns all offers:
+        setup: same 3 offers as above
+               request.max_stops=None
+        expected: all 3 offers returned (subject to price sort)
+
+      Results sorted by price ascending:
+        setup: mock returns offers with prices ["150.00", "89.99", "200.00"]
+        expected: returned list is sorted [89.99, 150.00, 200.00]
+
+      Empty results when no dates in window:
+        setup: mock flight_dates returns dates all outside the window
+        expected: returns empty list; flight_offers_search NOT called
+
+      round_trip: two itineraries in offer mapped correctly:
+        setup: mock offer with itineraries[0] (outbound) and itineraries[1] (return),
+               each with one segment
+        expected: FlightOfferResponse.outbound_segments has 1 item,
+                  FlightOfferResponse.return_segments has 1 item,
+                  FlightOfferResponse.return_date is set
+
+    implementation_guidelines: |
+      Flight Dates API call:
+        For one_way:
+          response = client.shopping.flight_dates.get(
+              origin=request.origin,
+              destination=request.destination,
+              oneWay='true'
+          )
+        For round_trip:
+          response = client.shopping.flight_dates.get(
+              origin=request.origin,
+              destination=request.destination,
+          )
+          (oneWay defaults to False/round_trip behavior)
+
+      Date filtering:
+        for item in response.data:
+            dep_date = date.fromisoformat(item['departureDate'])
+            if request.departure_date_from <= dep_date <= request.departure_date_to:
+                filtered.append(item)
+        For round_trip also check:
+            ret_date = date.fromisoformat(item.get('returnDate', '9999-01-01'))
+            if request.return_date_from <= ret_date <= request.return_date_to: ...
+
+      Flight Offers call per date:
+        params = {
+            'originLocationCode': request.origin,
+            'destinationLocationCode': request.destination,
+            'departureDate': str(date_item['departureDate']),
+            'adults': request.adults,
+            'max': 10,
+        }
+        if request.trip_type == 'round_trip':
+            params['returnDate'] = str(date_item['returnDate'])
+        if request.max_stops == 0:
+            params['nonStop'] = 'true'
+        response = client.shopping.flight_offers_search.get(**params)
+
+      max_stops filtering (after fetching, when max_stops is 1 or 2):
+        Count total stops as sum of stops across all segments in outbound itinerary.
+        Filter: sum(seg['numberOfStops'] + (1 if there are connecting segments else 0))
+        Simpler approach: count len(itineraries[0]['segments']) - 1 for connection count
+        plus sum of segment['numberOfStops'] for en-route stops.
+        For this project use: total_stops = len(itinerary['segments']) - 1
+        (each segment after the first represents a connection).
+
+      Offer mapping (_map_offer_to_response):
+        price = offer['price']['grandTotal']
+        currency = offer['price']['currency']
+        outbound = offer['itineraries'][0]
+        outbound_segments = [_map_segment(s) for s in outbound['segments']]
+        departure_date = date.fromisoformat(outbound['segments'][0]['departure']['at'][:10])
+        For round_trip:
+          return_itin = offer['itineraries'][1]
+          return_segments = [_map_segment(s) for s in return_itin['segments']]
+          return_date = date.fromisoformat(return_itin['segments'][0]['departure']['at'][:10])
+
+      Segment mapping:
+        SegmentInfo(
+          airline=seg['carrierCode'],
+          flight_number=f"{seg['carrierCode']} {seg['number']}",
+          departure_airport=seg['departure']['iataCode'],
+          departure_time=seg['departure']['at'],
+          arrival_airport=seg['arrival']['iataCode'],
+          arrival_time=seg['arrival']['at'],
+          duration=seg['duration'],
+          stops=seg.get('numberOfStops', 0),
+        )
+
+      Cache key security: use `_build_cache_key()` with all params as a sorted tuple.
+      Cache operations must be wrapped in `with _cache_lock:` — TTLCache is not
+      thread-safe and FastAPI def routes run in a threadpool.
+
+    dependencies: [t02, t03]
+
+    reference_docs: |
+      - POC amadeus-date-range-behavior: agentops/milestones/m01-core-search/poc/amadeus-date-range-behavior.md
+      - POC amadeus-sdk-async: agentops/milestones/m01-core-search/poc/amadeus-sdk-async.md
+      - Amadeus SDK: agentops/milestones/m01-core-search/research/amadeus_python_sdk.md
+      - cachetools: https://cachetools.readthedocs.io/en/stable/
+
+    status: complete
+    retry_count: 0
+    assigned_task_id: null
+    completed_at: null
+
+  - id: t06
+    name: search-endpoint-and-integration-tests
+    description: |
+      Implement the `POST /api/v1/search` route handler, wire it to the flight service,
+      and write integration tests covering all endpoint behaviors including validation
+      errors and service errors.
+    interfaces: |
+      Route handler in backend/src/app/api/search.py:
+
+      @router.post("/search", response_model=list[FlightOfferResponse])
+      def search(body: SearchRequest) -> list[FlightOfferResponse]:
+          client = get_amadeus_client()
+          return search_flights(body, client)
+
+      Note: handler is `def` (not `async def`) so Starlette threadpool runs it,
+      preventing event loop blocking by the sync Amadeus SDK.
+
+    acceptance_criteria: |
+      Integration tests in tests/test_search_endpoint.py using httpx.TestClient:
+
+      Valid one_way search returns 200 with offer list:
+        input: POST /api/v1/search with valid one_way body, mock flight service returning
+               2 FlightOfferResponse objects
+        expected: 200, JSON array of 2 offer objects matching FlightOfferResponse schema
+
+      Valid round_trip search returns 200:
+        input: POST /api/v1/search with valid round_trip body including return dates
+        expected: 200, JSON array; each offer has return_date and return_segments
+
+      Invalid IATA code returns 422:
+        input: POST /api/v1/search with origin="jfk" (lowercase)
+        expected: 422 with validation error detail mentioning origin field
+
+      Missing required field returns 422:
+        input: POST /api/v1/search with missing departure_date_from
+        expected: 422
+
+      Date range > 30 days returns 422:
+        input: departure_date_from=2026-04-01, departure_date_to=2026-05-15
+        expected: 422
+
+      Departure in past returns 422:
+        input: departure_date_from=2020-01-01, departure_date_to=2020-01-10
+        expected: 422
+
+      Service returns empty list → 200 empty array:
+        input: valid body, mock search_flights returns []
+        expected: 200, []
+
+      Amadeus rate limit → 429:
+        input: mock search_flights raises ResponseError with status_code=429
+        expected: 429 response with rate limit message
+
+      GET /api/v1/health returns 200:
+        expected: {"status": "ok"}
+
+      GET /api/v1/airports?q=LON returns 200 with mock data:
+        expected: 200, array of AirportResult objects
+
+      Coverage: tests/test_search_endpoint.py + tests/test_flight_service.py +
+      tests/test_schemas.py must achieve ≥80% coverage of backend/src/app/
+      (measured by `uv run pytest --cov=src/app --cov-report=term-missing`).
+
+    implementation_guidelines: |
+      - Test setup: use `httpx.TestClient(app)` from `fastapi.testclient`.
+        Actually `from starlette.testclient import TestClient` or
+        `from fastapi.testclient import TestClient` — both work; prefer fastapi's.
+      - Monkeypatching: use `monkeypatch.setattr` or `unittest.mock.patch` to mock
+        `search_flights` and `search_airports` in the service module so tests don't
+        make real Amadeus calls.
+        Example:
+          ```python
+          def test_search_one_way(monkeypatch):
+              monkeypatch.setattr(
+                  'app.api.search.search_flights',
+                  lambda req, client: [mock_offer]
+              )
+          ```
+      - For coverage measurement: add to pyproject.toml:
+          [tool.pytest.ini_options]
+          testpaths = ["tests"]
+          [tool.coverage.run]
+          source = ["src/app"]
+      - Tests must use `conftest.py` with a `client` fixture:
+          ```python
+          @pytest.fixture
+          def client():
+              from fastapi.testclient import TestClient
+              from app.main import app
+              return TestClient(app)
+          ```
+      - Do NOT import Settings at test module level; let FastAPI's DI system handle it.
+        Set env vars via `monkeypatch.setenv('AMADEUS_CLIENT_ID', 'test')` in conftest.
+
+    dependencies: [t04, t05]
+
+    reference_docs: |
+      - FastAPI testing: https://fastapi.tiangolo.com/tutorial/testing/
+      - pytest-asyncio: https://pytest-asyncio.readthedocs.io/
+
+    status: complete
+    retry_count: 0
+    assigned_task_id: null
+    completed_at: 2026-03-28T00:00:00Z
+
+  - id: t07
+    name: frontend-scaffold
+    status: complete
+    description: |
+      Create the React/TypeScript frontend project scaffold: Vite config with API proxy,
+      TypeScript types matching backend schemas, API client functions, and directory
+      structure for all components.
+    interfaces: |
+      Directory structure:
+        frontend/
+          package.json
+          vite.config.ts           # proxy /api -> localhost:8000
+          tsconfig.json            # strict: true
+          index.html
+          src/
+            main.tsx
+            App.tsx
+            types/
+              flight.ts            # TypeScript interfaces
+            api/
+              airports.ts          # searchAirports(query): Promise<AirportResult[]>
+              search.ts            # searchFlights(params): Promise<FlightOfferResponse[]>
+            components/
+              SearchForm/
+                index.tsx          # empty placeholder
+              ResultsList/
+                index.tsx          # empty placeholder
+              PriceGrid/
+                index.tsx          # empty placeholder
+              AirportAutocomplete/
+                index.tsx          # empty placeholder
+            pages/
+              HomePage.tsx         # placeholder
+
+      frontend/src/types/flight.ts:
+        export interface SegmentInfo {
+          airline: string;
+          flight_number: string;
+          departure_airport: string;
+          departure_time: string;
+          arrival_airport: string;
+          arrival_time: string;
+          duration: string;
+          stops: number;
+        }
+        export interface FlightOfferResponse {
+          price: string;
+          currency: string;
+          departure_date: string;
+          return_date: string | null;
+          outbound_segments: SegmentInfo[];
+          return_segments: SegmentInfo[];
+        }
+        export interface AirportResult {
+          iata_code: string;
+          name: string;
+          city: string;
+          country: string;
+        }
+        export interface SearchParams {
+          origin: AirportResult | null;
+          destination: AirportResult | null;
+          trip_type: 'one_way' | 'round_trip';
+          departure_date_from: string;
+          departure_date_to: string;
+          return_date_from: string;
+          return_date_to: string;
+          adults: number;
+          max_stops: number | null;
+        }
+
+      frontend/src/api/airports.ts:
+        export async function searchAirports(query: string): Promise<AirportResult[]>
+        // GET /api/v1/airports?q={query}
+        // Throws Error with human-readable message on non-2xx response
+
+      frontend/src/api/search.ts:
+        export async function searchFlights(params: SearchParams): Promise<FlightOfferResponse[]>
+        // POST /api/v1/search with JSON body derived from SearchParams
+        // Throws Error with human-readable message on non-2xx response
+
+      vite.config.ts:
+        server.proxy: { '/api': { target: 'http://localhost:8000', changeOrigin: true } }
+
+    acceptance_criteria: |
+      - `cd frontend && npm install` completes without errors.
+      - `npm run dev` starts on http://localhost:5173 without TypeScript errors.
+      - `npm run build` completes without TypeScript errors (strict mode enforced).
+      - `npm run lint` passes (ESLint, no errors).
+      - TypeScript types in flight.ts exactly match backend Pydantic schema field names
+        and types (snake_case field names, matching nullability).
+      - API functions handle non-2xx responses by throwing Error with message from
+        response JSON `{"detail": "..."}` field.
+      - API functions use native `fetch` (no axios dependency required).
+
+    implementation_guidelines: |
+      - Initialize with: `npm create vite@latest frontend -- --template react-ts`
+        then delete boilerplate (App.css, assets/react.svg, etc.).
+      - tsconfig.json must have `"strict": true` under compilerOptions.
+      - package.json dependencies:
+          "react": "^18.3.0"
+          "react-dom": "^18.3.0"
+        devDependencies:
+          "@types/react": "^18.3.0"
+          "@types/react-dom": "^18.3.0"
+          "@vitejs/plugin-react": "^4.3.0"
+          "typescript": "^5.5.0"
+          "vite": "^5.3.0"
+          "eslint": "^9.0.0"
+          "vitest": "^1.6.0"
+          "@testing-library/react": "^16.0.0"
+          "@testing-library/jest-dom": "^6.4.0"
+          "jsdom": "^24.0.0"
+      - API error handling pattern:
+          const res = await fetch(url, options);
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            throw new Error(body.detail ?? `HTTP ${res.status}`);
+          }
+          return res.json();
+      - Use snake_case keys in fetch request bodies to match backend Pydantic schema.
+        For SearchParams -> POST body mapping, convert null max_stops to absent key or
+        keep null (backend accepts null).
+      - vitest config in vite.config.ts:
+          test: { environment: 'jsdom', globals: true, setupFiles: ['src/setupTests.ts'] }
+
+    dependencies: []
+
+    reference_docs: |
+      - Vite docs: https://vitejs.dev/guide/
+      - React 18: https://react.dev/
+      - Frontend patterns: agentops/milestones/m01-core-search/research/react_typescript_patterns.md
+
+    retry_count: 0
+    assigned_task_id: null
+    completed_at: 2026-03-26T10:21:00Z
+
+  - id: t08
+    name: airport-autocomplete-component
+    description: |
+      Implement the AirportAutocomplete component: a text input with dropdown that
+      calls the backend airport search endpoint, debounced at 300ms, with keyboard
+      navigation and accessibility attributes.
+    interfaces: |
+      File: frontend/src/components/AirportAutocomplete/index.tsx
+
+      interface AirportAutocompleteProps {
+        label: string;                    // e.g. "Origin" or "Destination"
+        value: AirportResult | null;
+        onChange: (airport: AirportResult | null) => void;
+        placeholder?: string;             // e.g. "Search airport or city"
+        id: string;                       // for label htmlFor association
+        disabled?: boolean;
+      }
+
+      export function AirportAutocomplete(props: AirportAutocompleteProps): JSX.Element
+
+      Behavior:
+      - Renders a text input showing selected airport as "{IATA} — {city}" or empty
+      - On input change: clear selection, set query string
+      - After 300ms debounce: if query.length >= 3, call searchAirports(query)
+      - Show dropdown list of up to 10 results below input
+      - Each dropdown item shows: "{IATA} — {city}, {country}" on first line,
+        airport name on second line (smaller text)
+      - Click/Enter on item: set selected airport, close dropdown
+      - Escape key: close dropdown without selecting
+      - On blur: close dropdown after 150ms delay (allow click to register first)
+      - Loading state: show spinner or "Searching..." text while fetching
+      - Error state: show error message below input
+      - If query < 3 chars: show "Type at least 3 characters" hint or nothing
+
+    acceptance_criteria: |
+      Vitest + React Testing Library tests in
+      frontend/src/components/AirportAutocomplete/AirportAutocomplete.test.tsx:
+
+      Typing 3+ characters triggers searchAirports after debounce:
+        setup: mock searchAirports to return [LHR, LGW]
+        action: type "LON" into input, wait 300ms (use fake timers)
+        expected: searchAirports called with "LON"; dropdown shows 2 items
+
+      Typing fewer than 3 characters does not call searchAirports:
+        action: type "LO" into input, advance timers
+        expected: searchAirports NOT called
+
+      Selecting an item from dropdown calls onChange with AirportResult:
+        setup: dropdown visible with [LHR, LGW]
+        action: click on LHR item
+        expected: onChange called with AirportResult{iata_code: "LHR", ...}
+
+      Escape key closes dropdown:
+        setup: dropdown visible
+        action: press Escape
+        expected: dropdown not visible
+
+      Input has correct accessibility attributes:
+        expected: input has role="combobox", aria-autocomplete="list",
+                  aria-expanded="true" when open / "false" when closed,
+                  associated label via htmlFor/id
+
+      Component renders with disabled prop set:
+        action: render with disabled=true
+        expected: input element has disabled attribute
+
+    implementation_guidelines: |
+      - Use `useEffect` + `clearTimeout` for 300ms debounce pattern:
+          useEffect(() => {
+            if (query.length < 3) { setSuggestions([]); return; }
+            const timer = setTimeout(() => {
+              setLoading(true);
+              searchAirports(query)
+                .then(setSuggestions)
+                .catch(e => setError(e.message))
+                .finally(() => setLoading(false));
+            }, 300);
+            return () => clearTimeout(timer);
+          }, [query]);
+      - Use AbortController to cancel in-flight fetch requests:
+          Modify searchAirports to accept an optional AbortSignal parameter.
+          Pass `controller.signal` and abort in cleanup.
+      - Dropdown list: use `<ul role="listbox">` with `<li role="option">` items.
+      - Input: use `role="combobox"` with `aria-expanded`, `aria-controls` pointing to listbox.
+      - Keyboard navigation (arrow keys to move focus through options) is a nice-to-have;
+        Escape to close and Enter to select are required.
+      - Use CSS modules or inline styles — no CSS framework dependency.
+      - onBlur delay: use `setTimeout(() => setOpen(false), 150)` so mousedown on
+        dropdown item fires before the input loses focus.
+
+    dependencies: [t07]
+
+    reference_docs: |
+      - React Testing Library: https://testing-library.com/docs/react-testing-library/intro/
+      - Frontend patterns: agentops/milestones/m01-core-search/research/react_typescript_patterns.md
+      - ARIA combobox pattern: https://www.w3.org/WAI/ARIA/apg/patterns/combobox/
+
+    status: complete
+    retry_count: 0
+    assigned_task_id: null
+    completed_at: null
+
+  - id: t09
+    name: search-form-component
+    description: |
+      Implement the SearchForm component: trip type toggle, airport autocomplete fields,
+      date pickers, adults count, max stops filter, and form validation with submit
+      handling.
+    interfaces: |
+      File: frontend/src/components/SearchForm/index.tsx
+
+      interface SearchFormProps {
+        onSearch: (params: SearchParams) => void;
+        isLoading: boolean;
+      }
+
+      export function SearchForm(props: SearchFormProps): JSX.Element
+
+      Form fields:
+      - Trip type toggle: "One Way" / "Round Trip" (radio buttons or segmented control)
+      - Origin airport: <AirportAutocomplete> component
+      - Destination airport: <AirportAutocomplete> component
+      - Departure from: <input type="date"> labeled "Departure from"
+      - Departure to: <input type="date"> labeled "Departure to"
+      - Return from: <input type="date"> labeled "Return from" (visible only if round_trip)
+      - Return to: <input type="date"> labeled "Return to" (visible only if round_trip)
+      - Adults: <select> with options 1–9, labeled "Adults"
+      - Max stops: <select> with options Any/Nonstop/1 stop, labeled "Max stops"
+      - Submit button: "Search" (disabled when isLoading or form invalid)
+
+      Validation (inline, before submit):
+      - Origin and destination must be selected
+      - origin != destination (same IATA code)
+      - departure_date_from not in past
+      - departure_date_to >= departure_date_from
+      - (departure_date_to - departure_date_from) <= 30 days
+      - For round_trip: return_date_from and return_date_to required
+      - For round_trip: (return_date_to - return_date_from) <= 30 days
+      - For round_trip: return_date_from >= departure_date_from
+
+    acceptance_criteria: |
+      Vitest + React Testing Library tests in
+      frontend/src/components/SearchForm/SearchForm.test.tsx:
+
+      One-way search submits correctly:
+        setup: origin=JFK, destination=LAX, dep_from=2026-04-01, dep_to=2026-04-10,
+               trip_type=one_way, adults=1, max_stops=null
+        action: click Search button
+        expected: onSearch called with correct SearchParams; return date fields absent
+                  in the emitted params (return_date_from="" or return_date_to="")
+
+      Return date fields hidden for one_way:
+        action: select one_way trip type
+        expected: return date inputs not in document
+
+      Return date fields visible for round_trip:
+        action: select round_trip trip type
+        expected: return date inputs present in document
+
+      Search disabled when loading:
+        setup: isLoading=true
+        expected: Search button has disabled attribute
+
+      Date range > 30 days shows error and prevents submit:
+        action: set dep_from=2026-04-01, dep_to=2026-05-15, click Search
+        expected: error message about date range; onSearch NOT called
+
+      Past departure date shows error:
+        action: set dep_from=2020-01-01, dep_to=2020-01-10, click Search
+        expected: error message; onSearch NOT called
+
+      Same origin and destination shows error:
+        action: set both origin and destination to JFK
+        expected: error message; onSearch NOT called
+
+    implementation_guidelines: |
+      - Use controlled React state for all form fields. No form library needed.
+      - Date validation: use `new Date(dateString)` and compare to `new Date()` for
+        past check. For range check:
+          const msPerDay = 86400000;
+          const diff = (new Date(to).getTime() - new Date(from).getTime()) / msPerDay;
+          if (diff > 30) setError('...');
+      - Date inputs: use `<input type="date">` with `min` attribute set to today's
+        date (ISO string) to prevent past selection at browser level (belt-and-suspenders
+        on top of JS validation).
+      - All form labels must use `<label htmlFor="...">` with matching `id` on inputs.
+      - Trip type toggle: use two `<button>` elements with `aria-pressed` attribute,
+        or `<input type="radio">` with `<label>`.
+      - Max stops select values: "" (null/any), "0" (nonstop), "1" (1 stop).
+        Map to: null, 0, 1 when building SearchParams.
+      - Submit: call `event.preventDefault()` and run validation before calling
+        `props.onSearch(params)`.
+
+    dependencies: [t07, t08]
+
+    reference_docs: |
+      - Frontend patterns: agentops/milestones/m01-core-search/research/react_typescript_patterns.md
+      - ARIA date picker: https://www.w3.org/WAI/ARIA/apg/
+
+    status: complete
+    retry_count: 0
+    assigned_task_id: null
+    completed_at: null
+
+  - id: t10
+    name: results-list-and-flight-card-components
+    description: |
+      Implement the ResultsList component (loading, error, empty, and results states)
+      and the FlightCard sub-component that displays individual flight offer details.
+    interfaces: |
+      File: frontend/src/components/ResultsList/index.tsx
+
+      type SearchStatus = 'idle' | 'loading' | 'success' | 'error';
+
+      interface ResultsListProps {
+        status: SearchStatus;
+        results: FlightOfferResponse[];
+        errorMessage: string;
+      }
+
+      export function ResultsList(props: ResultsListProps): JSX.Element
+
+      File: frontend/src/components/ResultsList/FlightCard.tsx
+
+      interface FlightCardProps {
+        offer: FlightOfferResponse;
+      }
+
+      export function FlightCard(props: FlightCardProps): JSX.Element
+
+      FlightCard display layout:
+      - Header: total price (large, bold) + currency + departure date (+ return date for RT)
+      - Outbound section: labeled "Outbound" (or flight date)
+        For each segment:
+          airline code | flight number | dep airport + dep time → arr airport + arr time | duration | stops indicator
+      - Return section: labeled "Return" (only if return_segments.length > 0)
+        Same format as outbound
+      - Stops indicator: "Nonstop" if stops=0, "1 stop" if stops=1, etc.
+
+      ResultsList states:
+      - idle: render nothing (empty div)
+      - loading: render loading spinner or "Searching for flights..." message
+      - error: render error card with errorMessage
+      - success + results.length == 0: render "No flights found for this route and date range."
+      - success + results.length > 0: render "Showing {N} result(s)" + list of FlightCard
+
+    acceptance_criteria: |
+      Vitest + RTL tests in frontend/src/components/ResultsList/ResultsList.test.tsx:
+
+      Loading state renders loading indicator:
+        setup: status="loading"
+        expected: element with text matching /searching/i or role="progressbar" present
+
+      Error state renders error message:
+        setup: status="error", errorMessage="Rate limit exceeded"
+        expected: "Rate limit exceeded" visible
+
+      Empty results state renders no-results message:
+        setup: status="success", results=[]
+        expected: text matching /no flights found/i visible
+
+      Results state renders correct count:
+        setup: status="success", results=[offer1, offer2, offer3]
+        expected: text "Showing 3 result" visible (partial match ok)
+
+      FlightCard renders offer price:
+        setup: offer with price="298.50", currency="USD"
+        expected: "298.50" and "USD" both visible
+
+      FlightCard renders outbound segment details:
+        setup: offer with one outbound segment:
+               {airline: "BA", flight_number: "BA 123", departure_airport: "LHR",
+                departure_time: "2026-04-01T10:00:00", arrival_airport: "JFK",
+                arrival_time: "2026-04-01T15:30:00", duration: "PT5H30M", stops: 0}
+        expected: "BA 123", "LHR", "JFK", "Nonstop" all visible in document
+
+      FlightCard for one-way offer shows no return section:
+        setup: offer with return_segments=[]
+        expected: text "Return" not in document (or return section not present)
+
+    implementation_guidelines: |
+      - Use `aria-live="polite"` on the results container so screen readers announce
+        when results change.
+      - Format departure_time/arrival_time: parse with `new Date(str).toLocaleTimeString()`
+        to show local time (or use `Intl.DateTimeFormat` for HH:MM).
+      - Duration parsing: "PT7H30M" → "7h 30m". Use a simple regex:
+          function parseDuration(d: string): string {
+            const match = d.match(/PT(?:(\d+)H)?(?:(\d+)M)?/);
+            const h = match?.[1] ?? '0'; const m = match?.[2] ?? '0';
+            return `${h}h ${m}m`;
+          }
+      - Loading spinner: a simple CSS animated div is fine; no animation library needed.
+      - Use semantic HTML: results as `<ul>` with `<li>` for each FlightCard.
+        FlightCard itself renders an `<article>` or `<div>`.
+
+    dependencies: [t07]
+
+    reference_docs: |
+      - React Testing Library: https://testing-library.com/docs/react-testing-library/intro/
+
+    status: complete
+    retry_count: 0
+    assigned_task_id: null
+    completed_at: null
+
+  - id: t11
+    name: price-grid-component
+    description: |
+      Implement the PriceGrid component that displays a 1D table (one-way) or 2D
+      matrix (round-trip) of prices color-coded from green (cheapest) to red (most
+      expensive). Includes toggle between list and grid views.
+    interfaces: |
+      File: frontend/src/components/PriceGrid/index.tsx
+
+      interface PriceGridProps {
+        offers: FlightOfferResponse[];
+        tripType: 'one_way' | 'round_trip';
+      }
+
+      export function PriceGrid(props: PriceGridProps): JSX.Element
+
+      One-way grid (1D):
+        Table with columns: "Departure Date" | "Price"
+        One row per unique departure_date, showing the cheapest price for that date.
+        Rows sorted by date ascending.
+        Each price cell has background color from green (min price) to red (max price).
+
+      Round-trip grid (2D):
+        Table with:
+          Rows: unique departure dates (sorted ascending) as row headers
+          Columns: unique return dates (sorted ascending) as column headers
+          Cells: cheapest price for that (departure, return) pair, or empty if no offer
+        Each non-empty cell has background color from green (min) to red (max) across
+        all cells in the grid.
+
+      Color function:
+        function priceColor(price: number, min: number, max: number): string {
+          if (max === min) return 'hsl(120, 70%, 45%)'; // all same price = green
+          const ratio = (price - min) / (max - min);
+          const hue = Math.round(120 - ratio * 120); // 120=green, 0=red
+          return `hsl(${hue}, 70%, 45%)`;
+        }
+
+    acceptance_criteria: |
+      Vitest + RTL tests in frontend/src/components/PriceGrid/PriceGrid.test.tsx:
+
+      One-way grid renders correct number of rows:
+        setup: 3 offers with departure_dates [2026-04-01, 2026-04-02, 2026-04-01]
+               and prices ["150.00", "89.99", "120.00"]
+        expected: 2 data rows (2026-04-01 shows "120.00" as cheapest, 2026-04-02 shows "89.99")
+
+      One-way grid rows sorted by date:
+        setup: offers with dates in random order
+        expected: rows appear in ascending date order
+
+      Round-trip grid renders correct dimensions:
+        setup: offers with 2 unique departure dates and 2 unique return dates
+        expected: 2 row headers + 2 column headers (4 data cells possible)
+
+      Round-trip empty cell when no offer for that date pair:
+        setup: offers only cover [dep1,ret1] and [dep2,ret2], not [dep1,ret2]
+        expected: cell at [dep1,ret2] is empty
+
+      priceColor returns green for min price:
+        input: priceColor(100, 100, 200)
+        expected: returned string contains "120" (hue=120, green)
+
+      priceColor returns red for max price:
+        input: priceColor(200, 100, 200)
+        expected: returned string contains "0" (hue=0, red)
+
+      priceColor handles all-same prices:
+        input: priceColor(150, 150, 150)
+        expected: no NaN, returns valid hsl string
+
+    implementation_guidelines: |
+      - Extract cheapest price per date: use `reduce` to build a Map<date, price>.
+        For round-trip use a Map keyed on `${dep}:${ret}`.
+      - Sort dates: `[...dates].sort()` — ISO date strings sort lexicographically.
+      - Color function: export separately as `priceColor()` so it can be unit-tested
+        without rendering. Put in PriceGrid.tsx or a utils file.
+      - Table accessibility: use `<table>`, `<thead>`, `<tbody>`, `<th scope="row">`,
+        `<th scope="col">` for screen reader compatibility.
+      - For round-trip grid with many dates (up to 30×30=900 cells), the table should
+        still render correctly; no virtualization needed at this scale.
+      - Apply background color as inline style:
+          style={{ backgroundColor: priceColor(price, minPrice, maxPrice), color: '#fff' }}
+
+    dependencies: [t07, t10]
+
+    reference_docs: |
+      - Frontend patterns: agentops/milestones/m01-core-search/research/react_typescript_patterns.md
+
+    status: complete
+    retry_count: 0
+    assigned_task_id: null
+    completed_at: null
+
+  - id: t12
+    name: home-page-integration
+    status: in-progress
+    description: |
+      Integrate all components into the HomePage, wire up the search flow end-to-end,
+      implement the list/grid view toggle, and verify the full user flow works on
+      desktop and tablet (min-width 768px).
+    interfaces: |
+      File: frontend/src/pages/HomePage.tsx
+
+      State:
+        const [status, setStatus] = useState<'idle'|'loading'|'success'|'error'>('idle');
+        const [results, setResults] = useState<FlightOfferResponse[]>([]);
+        const [errorMessage, setErrorMessage] = useState('');
+        const [viewMode, setViewMode] = useState<'list'|'grid'>('list');
+        const [tripType, setTripType] = useState<'one_way'|'round_trip'>('one_way');
+
+      handleSearch(params: SearchParams):
+        - setStatus('loading'); setResults([]); setErrorMessage('');
+        - call searchFlights(params)
+        - on success: setStatus('success'); setResults(data)
+        - on error: setStatus('error'); setErrorMessage(err.message)
+
+      Layout:
+        <main>
+          <h1>Flight Price Tracker</h1>
+          <SearchForm onSearch={handleSearch} isLoading={status === 'loading'} />
+          {status === 'success' && results.length > 0 && (
+            <div>
+              <button onClick={() => setViewMode('list')} aria-pressed={viewMode==='list'}>List</button>
+              <button onClick={() => setViewMode('grid')} aria-pressed={viewMode==='grid'}>Grid</button>
+            </div>
+          )}
+          {viewMode === 'list' || status !== 'success'
+            ? <ResultsList status={status} results={results} errorMessage={errorMessage} />
+            : <PriceGrid offers={results} tripType={tripType} />
+          }
+        </main>
+
+      File: frontend/src/App.tsx
+        import { HomePage } from './pages/HomePage';
+        export default function App() { return <HomePage />; }
+
+    acceptance_criteria: |
+      End-to-end browser test (manual verification, no automated e2e test required):
+      - Start backend: `cd backend && uv run uvicorn src.app.main:app --reload --port 8000`
+      - Start frontend: `cd frontend && npm run dev`
+      - Navigate to http://localhost:5173
+      - Type "JFK" in Origin, "LON" in Destination → autocomplete dropdown appears
+        with airport options within 1 second of typing 3 characters
+      - Select JFK and LHR from dropdowns
+      - Set departure range (future dates, ≤30 days)
+      - Click Search → loading state appears; results appear within 5 seconds
+      - Results list shows at least 1 flight card with price, date, segments
+      - Toggle to Grid view → price grid renders with color coding
+      - Set date range > 30 days → error message shown, Search not submitted
+
+      Automated Vitest test in frontend/src/pages/HomePage.test.tsx:
+        handleSearch calls searchFlights and updates status:
+          setup: mock searchFlights to return [mockOffer1]
+          action: call handleSearch with valid params via SearchForm submit
+          expected: status transitions to 'loading' then 'success';
+                    results contains [mockOffer1]
+
+        handleSearch on error sets error state:
+          setup: mock searchFlights to throw Error('Rate limit exceeded')
+          action: trigger search
+          expected: status='error', errorMessage='Rate limit exceeded'
+
+        View toggle only shows when results present:
+          setup: status='idle'
+          expected: list/grid toggle buttons not in document
+          setup: status='success', results=[offer1]
+          expected: toggle buttons present
+
+      Frontend build and lint:
+        `npm run build` completes without TypeScript errors
+        `npm run lint` passes
+
+    implementation_guidelines: |
+      - tripType state in HomePage must stay in sync with SearchForm's internal state.
+        Pass a callback `onTripTypeChange` to SearchForm, or lift trip_type from
+        SearchParams in the handleSearch callback.
+        Simplest: extract `tripType` from `params.trip_type` inside `handleSearch`.
+      - Responsive layout: use CSS media query or flexbox/grid to ensure the form
+        and results stack vertically below 768px. Minimum: set max-width on main
+        container and use flexbox column layout.
+      - View toggle: show only when `status === 'success' && results.length > 0`.
+      - For the HomePage test: mock searchFlights at module level via vi.mock:
+          vi.mock('../api/search', () => ({
+            searchFlights: vi.fn().mockResolvedValue([mockOffer])
+          }));
+      - Ensure `<main>` has `role="main"` or is the native main element (counts for
+        accessibility).
+
+    dependencies: [t09, t10, t11]
+
+    reference_docs: |
+      - React state patterns: https://react.dev/learn/managing-state
+      - Frontend patterns: agentops/milestones/m01-core-search/research/react_typescript_patterns.md
+
+    status: complete
+    retry_count: 0
+    assigned_task_id: null
+    completed_at: null

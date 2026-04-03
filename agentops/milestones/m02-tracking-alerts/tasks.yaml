@@ -407,10 +407,10 @@ tasks:
 
   - id: t06
     name: scheduler-service
-    status: in-progress
+    status: in-review
     retry_count: 0
     assigned_task_id: null
-    completed_at: null
+    completed_at: 2026-04-02T00:00:00Z
     description: |
       Implement the APScheduler-based background scheduler that periodically checks
       all active tracked searches, writes price snapshots, and triggers email alerts.

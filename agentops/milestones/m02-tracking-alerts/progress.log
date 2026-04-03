@@ -17,3 +17,6 @@
 2026-03-28T00:00:00Z [DEV:t04] started
 2026-03-28T00:30:00Z [DEV:t04] finished: tracking REST API endpoints (POST/GET/DELETE/history) with lifespan handler and 13 integration tests all passing
 2026-03-28T00:00:00Z [DEV:t06] started
+2026-04-02T00:00:00Z [DEV:t06] finished: implemented APScheduler scheduler service with create_scheduler/check_all/check_single, updated main.py lifespan, 10 tests all passing
+2026-03-28T17:25:52Z [QA] started
+2026-03-28T18:52:53Z [QA] finished: FAIL — AC-10 .env.example missing DATABASE_URL, SCHEDULER_INTERVAL_MINUTES, SMTP_* vars (8 vars undocumented)

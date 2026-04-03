@@ -11,3 +11,8 @@ build/
 .venv/
 venv/
 node_modules/
+*.db
+.coverage
+tsconfig*.tsbuildinfo
+vite.config.d.ts
+vite.config.js
