@@ -1,7 +1,7 @@
 import threading
-from datetime import date
+from datetime import date, timedelta
 
-from amadeus import Client, Location
+from amadeus import Client, Location, ResponseError
 from cachetools import TTLCache
 
 from app.schemas.search import AirportResult, FlightOfferResponse, SearchRequest, SegmentInfo
@@ -87,31 +87,43 @@ def search_flights(request: SearchRequest, client: Client) -> list[FlightOfferRe
         if cache_key in _cache:
             return _cache[cache_key]  # type: ignore[return-value]
 
-    # Step 1: Get cheapest date calendar
-    if request.trip_type == "one_way":
-        dates_response = client.shopping.flight_dates.get(
-            origin=request.origin,
-            destination=request.destination,
-            oneWay="true",
-        )
-    else:
-        dates_response = client.shopping.flight_dates.get(
-            origin=request.origin,
-            destination=request.destination,
-        )
-
-    # Step 2: Filter by date window
+    # Step 1 & 2: Get cheapest date calendar or fallback
     filtered = []
-    for item in dates_response.data:
-        dep_date = date.fromisoformat(item["departureDate"])
-        if not (request.departure_date_from <= dep_date <= request.departure_date_to):
-            continue
-        if request.trip_type == "round_trip":
-            ret_date = date.fromisoformat(item.get("returnDate", "9999-01-01"))
-            if request.return_date_from and request.return_date_to:
-                if not (request.return_date_from <= ret_date <= request.return_date_to):
-                    continue
-        filtered.append(item)
+    try:
+        if request.trip_type == "one_way":
+            dates_response = client.shopping.flight_dates.get(
+                origin=request.origin,
+                destination=request.destination,
+                oneWay="true",
+            )
+        else:
+            dates_response = client.shopping.flight_dates.get(
+                origin=request.origin,
+                destination=request.destination,
+            )
+
+        for item in dates_response.data:
+            dep_date = date.fromisoformat(item["departureDate"])
+            if not (request.departure_date_from <= dep_date <= request.departure_date_to):
+                continue
+            if request.trip_type == "round_trip":
+                ret_date = date.fromisoformat(item.get("returnDate", "9999-01-01"))
+                if request.return_date_from and request.return_date_to:
+                    if not (request.return_date_from <= ret_date <= request.return_date_to):
+                        continue
+            filtered.append(item)
+    except ResponseError as e:
+        status_code = getattr(getattr(e, "response", None), "status_code", None)
+        if status_code in (404, 400):
+            d = request.departure_date_from
+            while d <= request.departure_date_to and len(filtered) < 5:
+                item = {"departureDate": str(d)}
+                if request.trip_type == "round_trip" and request.return_date_from:
+                    item["returnDate"] = str(request.return_date_from)
+                filtered.append(item)
+                d += timedelta(days=1)
+        else:
+            raise
 
     if not filtered:
         with _cache_lock:

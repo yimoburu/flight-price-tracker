@@ -281,7 +281,7 @@ def test_price_snapshot_back_reference_to_tracked_search():
             tracked_search_id=ts.id,
             checked_at=datetime(2026, 6, 5, 12, 0, 0),
             best_price=Decimal("200.00"),
-            currency="EUR",
+            currency="USD",
         )
         db.add(snap)
         db.commit()

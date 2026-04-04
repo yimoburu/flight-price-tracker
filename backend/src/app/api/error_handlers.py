@@ -24,4 +24,4 @@ async def amadeus_exception_handler(request: Request, exc: ResponseError) -> JSO
             status_code=502, content={"detail": "Flight data service temporarily unavailable."}
         )
     else:
-        return JSONResponse(status_code=500, content={"detail": "Unexpected error."})
+        return JSONResponse(status_code=500, content={"detail": f"Unexpected error: {exc}"})
