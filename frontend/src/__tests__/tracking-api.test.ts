@@ -1,3 +1,6 @@
+/**
+ * @vitest-environment jsdom
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getClientId, getAuthHeaders } from '../api/client';
 import {
@@ -10,6 +13,17 @@ import type { TrackedSearch, PriceHistory, CreateTrackedSearchRequest } from '..
 
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
+
+const localStorageMock = (() => {
+  let store: Record<string, string> = {};
+  return {
+    getItem(key: string) { return store[key] || null; },
+    setItem(key: string, value: string) { store[key] = value.toString(); },
+    clear() { store = {}; },
+    removeItem(key: string) { delete store[key]; }
+  };
+})();
+Object.defineProperty(global, 'localStorage', { value: localStorageMock });
 
 beforeEach(() => {
   mockFetch.mockReset();

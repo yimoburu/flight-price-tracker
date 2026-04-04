@@ -10,56 +10,56 @@ from sqlalchemy.orm import Session
 def test_settings_database_url_default():
     from app.config import Settings
 
-    s = Settings()
+    s = Settings(_env_file=None)
     assert s.database_url == "sqlite:///./flight_tracker.db"
 
 
 def test_settings_scheduler_interval_minutes_default():
     from app.config import Settings
 
-    s = Settings()
+    s = Settings(_env_file=None)
     assert s.scheduler_interval_minutes == 60
 
 
 def test_settings_smtp_host_default():
     from app.config import Settings
 
-    s = Settings()
+    s = Settings(_env_file=None)
     assert s.smtp_host == "localhost"
 
 
 def test_settings_smtp_port_default():
     from app.config import Settings
 
-    s = Settings()
+    s = Settings(_env_file=None)
     assert s.smtp_port == 25
 
 
 def test_settings_smtp_username_default():
     from app.config import Settings
 
-    s = Settings()
+    s = Settings(_env_file=None)
     assert s.smtp_username is None
 
 
 def test_settings_smtp_password_default():
     from app.config import Settings
 
-    s = Settings()
+    s = Settings(_env_file=None)
     assert s.smtp_password is None
 
 
 def test_settings_smtp_from_address_default():
     from app.config import Settings
 
-    s = Settings()
+    s = Settings(_env_file=None)
     assert s.smtp_from_address == "alerts@flighttracker.local"
 
 
 def test_settings_smtp_use_tls_default():
     from app.config import Settings
 
-    s = Settings()
+    s = Settings(_env_file=None)
     assert s.smtp_use_tls is False
 
 
@@ -136,6 +136,7 @@ def test_engine_uses_overridden_database_url(monkeypatch):
     original_settings = config.Settings
 
     class InMemorySettings(original_settings):
+        model_config = {"env_file": None}
         database_url: str = "sqlite:///:memory:"
 
     monkeypatch.setattr(config, "Settings", InMemorySettings)
