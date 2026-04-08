@@ -25,7 +25,7 @@ export function TrackedSearchesPage() {
   if (searches.length === 0) return <p>No tracked searches yet.</p>;
 
   return (
-    <main>
+    <div>
       <h1>My Tracked Searches</h1>
       {searches.map((s) => (
         <TrackedSearchRow
@@ -34,6 +34,6 @@ export function TrackedSearchesPage() {
           onDeleted={(id) => setSearches((prev) => prev.filter((x) => x.id !== id))}
         />
       ))}
-    </main>
+    </div>
   );
 }

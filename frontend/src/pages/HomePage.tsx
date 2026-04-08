@@ -33,7 +33,7 @@ export function HomePage() {
   }
 
   return (
-    <main>
+    <div>
       <h1>Flight Price Tracker</h1>
       <SearchForm onSearch={handleSearch} isLoading={status === 'loading'} />
       {status === 'success' && results.length > 0 && (
@@ -52,6 +52,6 @@ export function HomePage() {
         ? <ResultsList status={status} results={results} errorMessage={errorMessage} />
         : <PriceGrid offers={results} tripType={tripType} />
       }
-    </main>
+    </div>
   );
 }
