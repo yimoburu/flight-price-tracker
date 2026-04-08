@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
-import { PriceGrid, priceColor } from './index';
+import { PriceGrid, priceTier } from './index';
 import type { FlightOfferResponse } from '../../types/flight';
 
 const seg = {
@@ -56,12 +56,16 @@ describe('PriceGrid', () => {
       expect(screen.getByText('Price')).toBeInTheDocument();
     });
 
-    it('price cell has backgroundColor style applied', () => {
+    it('price cell has a color tier class applied', () => {
       render(<PriceGrid offers={oneWayOffers} tripType="one_way" />);
-      // Find the cell with price 89.99 and check it has a background color
+      // Find the cell with price 89.99 and check it has a Tailwind color class
       const priceCell = screen.getByText('89.99').closest('td');
       expect(priceCell).not.toBeNull();
-      expect(priceCell!.style.backgroundColor).toBeTruthy();
+      expect(
+        priceCell!.className.includes('bg-green') ||
+        priceCell!.className.includes('bg-red') ||
+        priceCell!.className.includes('bg-white')
+      ).toBe(true);
     });
   });
 
@@ -103,29 +107,25 @@ describe('PriceGrid', () => {
     });
   });
 
-  describe('priceColor utility', () => {
-    it('priceColor(100, 100, 200) contains "120" (min price → green hue=120)', () => {
-      const result = priceColor(100, 100, 200);
-      expect(result).toContain('120');
+  describe('priceTier utility', () => {
+    it('priceTier at or below p25 returns green classes', () => {
+      expect(priceTier(100, 100, 150)).toBe('bg-green-50 text-green-700');
     });
 
-    it('priceColor(200, 100, 200) starts with "hsl(0" (max price → red hue=0)', () => {
-      const result = priceColor(200, 100, 200);
-      expect(result.startsWith('hsl(0')).toBe(true);
+    it('priceTier at or above p75 returns red classes', () => {
+      expect(priceTier(200, 100, 150)).toBe('bg-red-50 text-red-600');
     });
 
-    it('priceColor(150, 150, 150) returns valid hsl string (all-same prices → green)', () => {
-      const result = priceColor(150, 150, 150);
-      expect(result).toMatch(/^hsl\(\d+, 70%, 45%\)$/);
-      expect(result).not.toContain('NaN');
-      // When all same price, should return green (hue=120)
-      expect(result).toBe('hsl(120, 70%, 45%)');
+    it('priceTier between p25 and p75 returns white/neutral classes', () => {
+      expect(priceTier(125, 100, 150)).toBe('bg-white text-neutral-900');
     });
 
-    it('priceColor midpoint returns hsl with hue near 60', () => {
-      // price=150, min=100, max=200 → ratio=0.5, hue=120-60=60
-      const result = priceColor(150, 100, 200);
-      expect(result).toBe('hsl(60, 70%, 45%)');
+    it('priceTier exactly at p25 boundary returns green', () => {
+      expect(priceTier(100, 100, 200)).toBe('bg-green-50 text-green-700');
+    });
+
+    it('priceTier exactly at p75 boundary returns red', () => {
+      expect(priceTier(200, 100, 200)).toBe('bg-red-50 text-red-600');
     });
   });
 });
