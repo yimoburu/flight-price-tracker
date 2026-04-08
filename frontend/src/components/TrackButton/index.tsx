@@ -1,6 +1,12 @@
 import { useState } from 'react';
 import { createTrackedSearch } from '../../api/tracking';
 import type { SearchParams } from '../../types/flight';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Bell, BellRing } from 'lucide-react';
 
 interface TrackButtonProps {
   searchParams: SearchParams;
@@ -14,10 +20,6 @@ export function TrackButton({ searchParams, currency }: TrackButtonProps) {
   const [threshold, setThreshold] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
-  if (isTracking) {
-    return <button disabled>Tracking</button>;
-  }
 
   function handleCancel() {
     setModalOpen(false);
@@ -64,26 +66,46 @@ export function TrackButton({ searchParams, currency }: TrackButtonProps) {
     }
   }
 
+  if (isTracking) {
+    return (
+      <Button disabled variant="outline" className="gap-2 text-neutral-400">
+        <BellRing className="h-4 w-4" />Tracking
+      </Button>
+    );
+  }
+
   return (
     <>
-      <button onClick={() => setModalOpen(true)}>Track this search</button>
-      {modalOpen && (
-        <div role="dialog" aria-modal="true">
-          <p>{searchParams.origin?.iata_code ?? ''} → {searchParams.destination?.iata_code ?? ''}</p>
-          <p>{searchParams.trip_type === 'one_way' ? 'One Way' : 'Round Trip'}</p>
-          <p>{searchParams.departure_date_from} to {searchParams.departure_date_to}</p>
-          <div>
-            <label htmlFor="track-email">Alert email</label>
-            <input
+      <Button variant="outline" className="gap-2" onClick={() => setModalOpen(true)}>
+        <Bell className="h-4 w-4" />Track this search
+      </Button>
+      <Dialog open={modalOpen} onOpenChange={(open) => { if (!open) handleCancel(); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Track this search</DialogTitle>
+          </DialogHeader>
+          {/* Route summary */}
+          <div className="bg-sky-50 rounded-lg p-3 text-sm flex flex-col gap-1">
+            <div className="font-medium">{searchParams.origin?.iata_code} → {searchParams.destination?.iata_code}</div>
+            <Badge variant="secondary" className="w-fit">
+              {searchParams.trip_type === 'one_way' ? 'One Way' : 'Round Trip'}
+            </Badge>
+            <div className="text-neutral-500">{searchParams.departure_date_from} to {searchParams.departure_date_to}</div>
+          </div>
+          {/* Email field */}
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="track-email">Alert email</Label>
+            <Input
               id="track-email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
           </div>
-          <div>
-            <label htmlFor="track-threshold">Price threshold ({currency})</label>
-            <input
+          {/* Threshold field */}
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="track-threshold">Price threshold ({currency})</Label>
+            <Input
               id="track-threshold"
               type="number"
               min="0.01"
@@ -92,11 +114,14 @@ export function TrackButton({ searchParams, currency }: TrackButtonProps) {
               onChange={(e) => setThreshold(e.target.value)}
             />
           </div>
-          {formError && <p role="alert">{formError}</p>}
-          <button onClick={handleSave} disabled={submitting}>Save</button>
-          <button onClick={handleCancel}>Cancel</button>
-        </div>
-      )}
+          {formError && <p role="alert" className="text-sm text-red-500">{formError}</p>}
+          {/* Actions */}
+          <div className="flex gap-2 justify-end pt-2">
+            <Button variant="ghost" onClick={handleCancel}>Cancel</Button>
+            <Button onClick={handleSave} disabled={submitting}>Save</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
