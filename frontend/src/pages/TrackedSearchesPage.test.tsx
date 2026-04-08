@@ -2,6 +2,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TrackedSearchesPage } from './TrackedSearchesPage';
 import type { TrackedSearch } from '../types/tracking';
+import { MemoryRouter } from 'react-router-dom';
 
 vi.mock('../api/tracking', () => ({
   listTrackedSearches: vi.fn(),
@@ -36,14 +37,13 @@ const makeSearch = (id: string, origin: string, destination: string): TrackedSea
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.spyOn(window, 'confirm').mockReturnValue(true);
 });
 
 describe('TrackedSearchesPage', () => {
   it('shows "Loading..." on mount', async () => {
     let resolve!: (value: TrackedSearch[]) => void;
     mockListTrackedSearches.mockReturnValue(new Promise((res) => { resolve = res; }));
-    render(<TrackedSearchesPage />);
+    render(<MemoryRouter><TrackedSearchesPage /></MemoryRouter>);
     expect(screen.getByText('Loading...')).toBeInTheDocument();
     resolve([]);
     await waitFor(() => {
@@ -53,17 +53,17 @@ describe('TrackedSearchesPage', () => {
 
   it('shows error message when listTrackedSearches rejects', async () => {
     mockListTrackedSearches.mockRejectedValue(new Error('Server unavailable'));
-    render(<TrackedSearchesPage />);
+    render(<MemoryRouter><TrackedSearchesPage /></MemoryRouter>);
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent('Server unavailable');
     });
   });
 
-  it('shows "No tracked searches yet." when list is empty', async () => {
+  it('shows "No tracked searches yet" when list is empty', async () => {
     mockListTrackedSearches.mockResolvedValue([]);
-    render(<TrackedSearchesPage />);
+    render(<MemoryRouter><TrackedSearchesPage /></MemoryRouter>);
     await waitFor(() => {
-      expect(screen.getByText('No tracked searches yet.')).toBeInTheDocument();
+      expect(screen.getByText('No tracked searches yet')).toBeInTheDocument();
     });
   });
 
@@ -73,7 +73,7 @@ describe('TrackedSearchesPage', () => {
       makeSearch('s2', 'LAX', 'ORD'),
     ];
     mockListTrackedSearches.mockResolvedValue(searches);
-    render(<TrackedSearchesPage />);
+    render(<MemoryRouter><TrackedSearchesPage /></MemoryRouter>);
     await waitFor(() => {
       expect(screen.getByText(/SFO/)).toBeInTheDocument();
       expect(screen.getByText(/LAX/)).toBeInTheDocument();
@@ -87,13 +87,22 @@ describe('TrackedSearchesPage', () => {
     ];
     mockListTrackedSearches.mockResolvedValue(searches);
     mockDeleteTrackedSearch.mockResolvedValue(undefined);
-    render(<TrackedSearchesPage />);
+    render(<MemoryRouter><TrackedSearchesPage /></MemoryRouter>);
     await waitFor(() => {
       expect(screen.getByText(/SFO/)).toBeInTheDocument();
     });
-    // Delete the first row
+    // Delete the first row — opens AlertDialog
     const deleteButtons = screen.getAllByRole('button', { name: /delete/i });
     fireEvent.click(deleteButtons[0]);
+    // Wait for AlertDialog and click the Delete action
+    await waitFor(() => {
+      expect(screen.getByText('Delete tracked search?')).toBeInTheDocument();
+    });
+    const allDeleteButtons = screen.getAllByRole('button', { name: /delete/i });
+    const dialogDeleteButton = allDeleteButtons.find(btn =>
+      btn.closest('[role="alertdialog"]')
+    );
+    fireEvent.click(dialogDeleteButton!);
     await waitFor(() => {
       expect(screen.queryByText(/SFO/)).not.toBeInTheDocument();
       expect(screen.getByText(/LAX/)).toBeInTheDocument();
