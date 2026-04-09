@@ -50,7 +50,6 @@ const mockHistory: PriceHistory = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.spyOn(window, 'confirm').mockReturnValue(true);
 });
 
 describe('TrackedSearchRow', () => {
@@ -82,11 +81,19 @@ describe('TrackedSearchRow', () => {
     expect(screen.getByText(/2026-06-30/)).toBeInTheDocument();
   });
 
-  it('delete button calls window.confirm and deleteTrackedSearch on confirm', async () => {
+  it('clicking Delete opens AlertDialog and clicking Delete action calls deleteTrackedSearch', async () => {
     mockDeleteTrackedSearch.mockResolvedValue(undefined);
     render(<TrackedSearchRow search={baseSearch} onDeleted={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: /delete/i }));
-    expect(window.confirm).toHaveBeenCalledWith('Delete this tracked search?');
+    await waitFor(() => {
+      expect(screen.getByText('Delete tracked search?')).toBeInTheDocument();
+    });
+    // Click the Delete action button inside the AlertDialog
+    const deleteActions = screen.getAllByRole('button', { name: /delete/i });
+    const dialogDeleteButton = deleteActions.find(btn =>
+      btn.closest('[role="alertdialog"]')
+    );
+    fireEvent.click(dialogDeleteButton!);
     await waitFor(() => {
       expect(mockDeleteTrackedSearch).toHaveBeenCalledWith('search-1');
     });
@@ -98,14 +105,25 @@ describe('TrackedSearchRow', () => {
     render(<TrackedSearchRow search={baseSearch} onDeleted={onDeleted} />);
     fireEvent.click(screen.getByRole('button', { name: /delete/i }));
     await waitFor(() => {
+      expect(screen.getByText('Delete tracked search?')).toBeInTheDocument();
+    });
+    const deleteActions = screen.getAllByRole('button', { name: /delete/i });
+    const dialogDeleteButton = deleteActions.find(btn =>
+      btn.closest('[role="alertdialog"]')
+    );
+    fireEvent.click(dialogDeleteButton!);
+    await waitFor(() => {
       expect(onDeleted).toHaveBeenCalledWith('search-1');
     });
   });
 
-  it('does not call deleteTrackedSearch when confirm is cancelled', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
+  it('clicking Cancel in AlertDialog does not call deleteTrackedSearch', async () => {
     render(<TrackedSearchRow search={baseSearch} onDeleted={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: /delete/i }));
+    await waitFor(() => {
+      expect(screen.getByText('Delete tracked search?')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
     expect(mockDeleteTrackedSearch).not.toHaveBeenCalled();
   });
 
@@ -113,6 +131,14 @@ describe('TrackedSearchRow', () => {
     mockDeleteTrackedSearch.mockRejectedValue(new Error('Server error'));
     render(<TrackedSearchRow search={baseSearch} onDeleted={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: /delete/i }));
+    await waitFor(() => {
+      expect(screen.getByText('Delete tracked search?')).toBeInTheDocument();
+    });
+    const deleteActions = screen.getAllByRole('button', { name: /delete/i });
+    const dialogDeleteButton = deleteActions.find(btn =>
+      btn.closest('[role="alertdialog"]')
+    );
+    fireEvent.click(dialogDeleteButton!);
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent('Server error');
     });

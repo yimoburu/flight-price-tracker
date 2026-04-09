@@ -1,0 +1,24 @@
+[PM] PRD generated
+2026-04-05T16:31:57Z [UX-REVIEW] PRD review finished: APPROVED — solid UX spec with two warnings worth addressing before implementation
+2026-04-05T16:33:38Z [ARCHITECT] started
+2026-04-05T16:51:45Z [ARCHITECT] poc started: tailwind-vite-integration — question: Does Tailwind CSS v3 install correctly via PostCSS in this Vite 5 project, and do utility classes work in the build output?
+2026-04-05T16:53:04Z [ARCHITECT] poc started: vitest-css-compat — question: Does adding a CSS import in main.tsx and Tailwind CSS cause existing Vitest tests to fail?
+2026-04-05T16:54:35Z [ARCHITECT] poc started: shadcn-noninteractive — question: Can shadcn/ui be initialized non-interactively in a developer agent context?
+2026-04-05T17:13:01Z [ARCHITECT] poc finished: tailwind-vite-integration — VIABLE — Tailwind CSS v3.4 + PostCSS + Vite 5 builds successfully; CSS output 20KB; all 98 tests pass
+2026-04-05T17:13:01Z [ARCHITECT] poc finished: shadcn-noninteractive — VIABLE — npx shadcn@latest init --template=vite --yes --base=radix --preset=nova runs non-interactively; all 10 components installed; nova preset CSS requires manual v3-compatible index.css (not nova CSS); tailwind.config.ts needs CSS variable color mappings
+2026-04-05T17:13:01Z [ARCHITECT] poc finished: vitest-css-compat — VIABLE — Tailwind CSS + shadcn/ui does not break existing 98 Vitest tests; jsdom handles CSS imports silently; no css:true config needed in vitest
+2026-04-05T17:22:26Z [ARCHITECT] finished: design generated — Tailwind CSS v3+PostCSS+shadcn/ui Nova on Vite 5; 6 tasks across tooling setup, nav/shell, search form, results/track, price grid, and tracked searches page; 3 POCs run (all VIABLE); 2 new ADRs (ADR-008, ADR-009)
+2026-04-05T17:22:26Z [ARCHITECT] finished: tasks created: t01, t02, t03, t04, t05, t06 — 6 tasks
+2026-04-04T00:00:00Z [UX-REVIEW] Design review finished: APPROVED — clean hierarchy and purposeful decisions; invisible return-date row is the one risk to watch during Post-QA
+2026-04-04T00:01:00Z [ARCH-REVIEW] finished: CHANGES_REQUIRED — two blocking issues: visibility-hidden return-date breaks existing test contract; priceTier percentile math unspecified leaving correctness gap
+2026-04-05T18:53:12Z [PM] user feedback folded into t05+t06: display USD as default currency on all price amounts
+2026-04-05T18:55:00Z [DEV:t01] started
+2026-04-07T00:00:00Z [DEV:t01] finished: installed Tailwind CSS v3 + PostCSS + shadcn/ui Nova preset with 11 UI components; @/alias configured; all 98 tests passing
+2026-04-07T21:00:06Z [DEV:t02] started
+2026-04-08T17:04:41Z [DEV:t02] finished: fixed NavBar (fixed positioning, brand logo, active-route highlighting), App.tsx shell layout, removed <main> from pages; 104 tests passing (6 new)
+2026-04-05T00:00:00Z [DEV:t03] started
+2026-04-05T00:00:00Z [DEV:t05] started
+2026-04-05T10:00:00Z [DEV:t04] started
+2026-04-08T21:32:20Z [QA] started
+2026-04-09T00:04:42Z [QA] finished: PASS — all 105 frontend tests pass, 139 backend tests pass, all t01-t06 acceptance criteria met, build succeeds with Tailwind base styles
+2026-04-05T19:00:00Z [PM] milestone m03-ux-overhaul complete

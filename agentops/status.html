@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DevAgent Dashboard</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.1/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+:root {
+  --bg-primary: #0d1117;
+  --bg-secondary: #161b22;
+  --bg-tertiary: #1c2128;
+  --bg-hover: #21262d;
+  --border: #30363d;
+  --text-primary: #e6edf3;
+  --text-secondary: #8b949e;
+  --text-muted: #6e7681;
+  --accent-blue: #58a6ff;
+  --accent-green: #3fb950;
+  --accent-orange: #d29922;
+  --accent-red: #f85149;
+  --accent-purple: #bc8cff;
+  --badge-complete-bg: #1b3a2d;
+  --badge-complete-fg: #3fb950;
+  --badge-progress-bg: #1a2740;
+  --badge-progress-fg: #58a6ff;
+  --badge-planned-bg: #272830;
+  --badge-planned-fg: #8b949e;
+  --badge-failed-bg: #3d1a1e;
+  --badge-failed-fg: #f85149;
+  --sidebar-w: 260px;
+  --header-h: 52px;
+  --footer-h: 32px;
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'IBM Plex Sans', -apple-system, sans-serif;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--sans);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+.header {
+  height: var(--header-h);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 16px;
+  flex-shrink: 0;
+}
+.header-logo {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--accent-blue);
+  letter-spacing: -0.5px;
+}
+.header-goal {
+  font-size: 13px;
+  color: var(--text-secondary);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.header-version {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--bg-tertiary);
+  padding: 3px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+
+/* Main layout */
+.main {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* Sidebar */
+.sidebar {
+  width: var(--sidebar-w);
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow-y: auto;
+}
+.sidebar-section {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.sidebar-section:last-child { border-bottom: none; }
+.sidebar-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+  padding: 0 16px 8px;
+}
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 16px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-secondary);
+  transition: background 0.1s, color 0.1s;
+}
+.sidebar-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+.sidebar-item.active { background: var(--bg-hover); color: var(--text-primary); border-left: 2px solid var(--accent-blue); padding-left: 14px; }
+.sidebar-item .icon { font-size: 14px; width: 20px; text-align: center; flex-shrink: 0; }
+.sidebar-item .label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar-item .badge {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+.badge-complete { background: var(--badge-complete-bg); color: var(--badge-complete-fg); }
+.badge-progress { background: var(--badge-progress-bg); color: var(--badge-progress-fg); }
+.badge-planned { background: var(--badge-planned-bg); color: var(--badge-planned-fg); }
+.badge-failed { background: var(--badge-failed-bg); color: var(--badge-failed-fg); }
+
+/* Content */
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 32px;
+}
+.content.no-padding {
+  padding: 0;
+}
+
+/* Footer */
+.footer {
+  height: var(--footer-h);
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  font-size: 11px;
+  color: var(--text-muted);
+  gap: 16px;
+  flex-shrink: 0;
+}
+.footer .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-green); }
+.footer .dot.stale { background: var(--accent-orange); }
+
+/* Overview */
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+  margin-bottom: 28px;
+}
+.stat-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+.stat-card .stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+.stat-card .stat-value { font-family: var(--mono); font-size: 28px; font-weight: 700; }
+.stat-card .stat-value.green { color: var(--accent-green); }
+.stat-card .stat-value.blue { color: var(--accent-blue); }
+.stat-card .stat-value.orange { color: var(--accent-orange); }
+
+.progress-bar-container {
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+  height: 8px;
+  margin-bottom: 28px;
+  overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-green), var(--accent-blue));
+  border-radius: 6px;
+  transition: width 0.5s ease;
+}
+
+/* Tables */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-bottom: 24px;
+}
+.data-table th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.data-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+.data-table tr:hover td { background: var(--bg-hover); }
+.data-table .id-col { font-family: var(--mono); font-size: 12px; color: var(--text-muted); width: 60px; }
+
+/* Status inline badge */
+.status-badge {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+/* Section headers */
+.section-title {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Tabs */
+.tab-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+}
+.tab-btn {
+  padding: 10px 18px;
+  font-size: 13px;
+  font-family: var(--sans);
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+.tab-btn:hover { color: var(--text-primary); }
+.tab-btn.active { color: var(--text-primary); border-bottom-color: var(--accent-blue); }
+
+/* Log timeline */
+.log-timeline {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.8;
+  max-height: 400px;
+  overflow-y: auto;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 16px;
+}
+.log-line { color: var(--text-secondary); }
+.log-line .timestamp { color: var(--text-muted); }
+.log-line .agent-pm { color: var(--accent-purple); }
+.log-line .agent-dev { color: var(--accent-green); }
+.log-line .agent-review { color: var(--accent-orange); }
+.log-line .agent-qa { color: var(--accent-blue); }
+.log-line .agent-arch { color: var(--accent-red); }
+
+/* Markdown viewer */
+.md-viewer {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 24px;
+  line-height: 1.7;
+  font-size: 14px;
+}
+.md-viewer h1 { font-size: 22px; margin-bottom: 16px; color: var(--text-primary); border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+.md-viewer h2 { font-size: 18px; margin-top: 24px; margin-bottom: 12px; color: var(--text-primary); }
+.md-viewer h3 { font-size: 15px; margin-top: 20px; margin-bottom: 8px; color: var(--text-primary); }
+.md-viewer p { margin-bottom: 12px; color: var(--text-secondary); }
+.md-viewer ul, .md-viewer ol { margin-bottom: 12px; padding-left: 24px; color: var(--text-secondary); }
+.md-viewer li { margin-bottom: 4px; }
+.md-viewer code { font-family: var(--mono); font-size: 13px; background: var(--bg-tertiary); padding: 2px 6px; border-radius: 4px; }
+.md-viewer pre { background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; padding: 16px; overflow-x: auto; margin-bottom: 16px; }
+.md-viewer pre code { background: none; padding: 0; }
+.md-viewer table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+.md-viewer th, .md-viewer td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; font-size: 13px; }
+.md-viewer th { background: var(--bg-tertiary); font-weight: 600; }
+.md-viewer blockquote { border-left: 3px solid var(--accent-blue); padding-left: 16px; color: var(--text-muted); margin-bottom: 12px; }
+.md-viewer a { color: var(--accent-blue); text-decoration: none; }
+.md-viewer a:hover { text-decoration: underline; }
+.md-viewer img { max-width: 100%; border-radius: 6px; }
+
+/* File browser */
+.file-browser {
+  display: flex;
+  height: calc(100vh - var(--header-h) - var(--footer-h));
+  gap: 0;
+}
+.file-tree {
+  width: 280px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border);
+  padding: 8px 0;
+}
+.file-viewer {
+  flex: 1;
+  overflow: auto;
+  background: var(--bg-tertiary);
+  padding: 16px 24px;
+}
+.tree-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tree-item:hover { background: var(--bg-hover); }
+.tree-item.active { background: var(--bg-hover); color: var(--accent-blue); }
+.tree-item .tree-icon { font-size: 12px; width: 16px; text-align: center; flex-shrink: 0; }
+.tree-dir-toggle { width: 12px; text-align: center; font-size: 10px; color: var(--text-muted); flex-shrink: 0; cursor: pointer; }
+.tree-children { display: none; }
+.tree-children.open { display: block; }
+
+.file-content-view {
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.file-content-view img { max-width: 100%; }
+.file-path-bar {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 8px 0 16px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+
+/* Loading / empty states */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-muted);
+}
+.empty-state .icon { font-size: 48px; margin-bottom: 16px; opacity: 0.4; }
+.empty-state .msg { font-size: 14px; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-logo">▸ DevAgent</div>
+  <div class="header-goal" id="header-goal">Loading...</div>
+  <div class="header-version" id="header-version">v-.-.-</div>
+</div>
+
+<div class="main">
+  <div class="sidebar" id="sidebar"></div>
+  <div class="content" id="content">
+    <div class="empty-state"><div class="icon">⏳</div><div class="msg">Loading project data...</div></div>
+  </div>
+</div>
+
+<div class="footer">
+  <div class="dot" id="status-dot"></div>
+  <span id="status-text">Connecting...</span>
+  <span style="flex:1"></span>
+  <span id="last-updated">—</span>
+</div>
+
+<script>
+// ── State ──
+let projectData = null;
+let currentView = 'overview'; // 'overview' | 'm01' | 'files'
+let fileTreeData = null;
+let selectedFilePath = null;
+let lastProjectJSON = '';
+let lastTreeJSON = '';
+
+// ── Marked config ──
+marked.setOptions({
+  highlight: (code, lang) => {
+    if (lang && hljs.getLanguage(lang)) return hljs.highlight(code, { language: lang }).value;
+    return hljs.highlightAuto(code).value;
+  },
+  breaks: true,
+});
+
+// ── API ──
+async function fetchJSON(url) {
+  const r = await fetch(url);
+  if (!r.ok) return null;
+  return r.json();
+}
+
+async function pollData() {
+  try {
+    const [proj, tree] = await Promise.all([fetchJSON('/api/project'), fetchJSON('/api/tree')]);
+    const projJSON = JSON.stringify(proj);
+    const treeJSON = JSON.stringify(tree);
+    const changed = projJSON !== lastProjectJSON || treeJSON !== lastTreeJSON;
+    lastProjectJSON = projJSON;
+    lastTreeJSON = treeJSON;
+    if (proj) projectData = proj;
+    if (tree) fileTreeData = tree;
+
+    document.getElementById('status-dot').className = 'dot';
+    document.getElementById('status-text').textContent = 'Connected';
+    document.getElementById('last-updated').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+
+    if (changed) render();
+  } catch (e) {
+    document.getElementById('status-dot').className = 'dot stale';
+    document.getElementById('status-text').textContent = 'Disconnected';
+  }
+}
+
+// ── Render ──
+function render() {
+  if (!projectData) return;
+  renderHeader();
+  renderSidebar();
+  renderContent();
+}
+
+function renderHeader() {
+  document.getElementById('header-goal').textContent = projectData.goal || 'Unknown project';
+  document.getElementById('header-version').textContent = 'v' + (projectData.version || '0.0.0');
+}
+
+function renderSidebar() {
+  const ms = projectData.milestones || [];
+  let html = '';
+
+  // Project section: Overview + File Browser
+  html += '<div class="sidebar-section">';
+  html += '<div class="sidebar-label">Project</div>';
+  html += `<div class="sidebar-item ${currentView === 'overview' ? 'active' : ''}" onclick="navigate('overview')">
+    <span class="icon">◉</span><span class="label">Overview</span></div>`;
+  html += `<div class="sidebar-item ${currentView === 'dev-rules' ? 'active' : ''}" onclick="navigate('dev-rules')" style="padding-left:28px;font-size:12px">
+    <span class="icon" style="font-size:11px">⚙</span><span class="label">Development Rules</span></div>`;
+  html += `<div class="sidebar-item ${currentView === 'adr-history' ? 'active' : ''}" onclick="navigate('adr-history')" style="padding-left:28px;font-size:12px">
+    <span class="icon" style="font-size:11px">📋</span><span class="label">ADR History</span></div>`;
+  html += `<div class="sidebar-item ${currentView === 'files' ? 'active' : ''}" onclick="navigate('files')">
+    <span class="icon">☰</span><span class="label">File Browser</span></div>`;
+  html += '</div>';
+
+  // Milestones
+  html += '<div class="sidebar-section">';
+  html += '<div class="sidebar-label">Milestones</div>';
+  for (const m of ms) {
+    const icon = m.status === 'complete' ? '✓' : m.status === 'in-progress' ? '◔' : '○';
+    const badgeClass = m.status === 'complete' ? 'badge-complete' : m.status === 'in-progress' ? 'badge-progress' : 'badge-planned';
+    const taskInfo = m.task_total ? `${m.task_complete}/${m.task_total}` : '';
+    html += `<div class="sidebar-item ${currentView === m.id ? 'active' : ''}" onclick="navigate('${m.id}')">
+      <span class="icon">${icon}</span>
+      <span class="label">${m.id} ${m.name || ''}</span>
+      ${taskInfo ? `<span class="badge ${badgeClass}">${taskInfo}</span>` : ''}
+    </div>`;
+  }
+  html += '</div>';
+
+  document.getElementById('sidebar').innerHTML = html;
+}
+
+function renderContent() {
+  const el = document.getElementById('content');
+  el.classList.toggle('no-padding', currentView === 'files');
+  if (currentView === 'overview') renderOverview(el);
+  else if (currentView === 'dev-rules') renderMarkdownFile(el, 'agentops/DEVELOPMENT_RULES.md', 'Development Rules');
+  else if (currentView === 'adr-history') renderMarkdownFile(el, 'agentops/ADR_history.md', 'Architecture Decision Records');
+  else if (currentView === 'files') renderFileBrowser(el);
+  else renderMilestone(el, currentView);
+}
+
+// ── Overview ──
+function renderOverview(el) {
+  const ms = projectData.milestones || [];
+  const total = ms.length;
+  const complete = ms.filter(m => m.status === 'complete').length;
+  const inProgress = ms.filter(m => m.status === 'in-progress').length;
+  const pct = total ? Math.round((complete / total) * 100) : 0;
+
+  let html = `
+    <div class="overview-grid">
+      <div class="stat-card"><div class="stat-label">Milestones</div><div class="stat-value">${total}</div></div>
+      <div class="stat-card"><div class="stat-label">Complete</div><div class="stat-value green">${complete}</div></div>
+      <div class="stat-card"><div class="stat-label">In Progress</div><div class="stat-value blue">${inProgress}</div></div>
+      <div class="stat-card"><div class="stat-label">Progress</div><div class="stat-value orange">${pct}%</div></div>
+    </div>
+    <div class="progress-bar-container"><div class="progress-bar-fill" style="width:${pct}%"></div></div>
+    <div class="section-title">Milestones</div>
+    <table class="data-table">
+      <thead><tr><th>ID</th><th>Name</th><th>Status</th><th>Tasks</th></tr></thead>
+      <tbody>`;
+  for (const m of ms) {
+    const badgeClass = m.status === 'complete' ? 'badge-complete' : m.status === 'in-progress' ? 'badge-progress' : m.status === 'failed' ? 'badge-failed' : 'badge-planned';
+    const taskInfo = m.task_total ? `${m.task_complete}/${m.task_total}` : '—';
+    html += `<tr style="cursor:pointer" onclick="navigate('${m.id}')">
+      <td class="id-col">${m.id}</td>
+      <td>${m.name || ''}</td>
+      <td><span class="status-badge ${badgeClass}">${m.status || 'unknown'}</span></td>
+      <td>${taskInfo}</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+// ── Markdown file viewer (dev rules, ADR history) ──
+async function renderMarkdownFile(el, filePath, title) {
+  el.innerHTML = '<div class="empty-state"><div class="icon">⏳</div><div class="msg">Loading...</div></div>';
+  const data = await fetchJSON(`/api/file?path=${encodeURIComponent(filePath)}`);
+  if (!data || data.error) {
+    el.innerHTML = `<div class="empty-state"><div class="icon">📄</div><div class="msg">${title} not found</div></div>`;
+    return;
+  }
+  el.innerHTML = `<div class="md-viewer">${marked.parse(data.content)}</div>`;
+  el.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
+}
+
+// ── Milestone detail ──
+async function renderMilestone(el, milestoneId) {
+  el.innerHTML = '<div class="empty-state"><div class="icon">⏳</div><div class="msg">Loading milestone...</div></div>';
+  const data = await fetchJSON(`/api/milestone?id=${milestoneId}`);
+  if (!data || data.error) {
+    el.innerHTML = `<div class="empty-state"><div class="icon">⚠</div><div class="msg">${data?.error || 'Failed to load'}</div></div>`;
+    return;
+  }
+
+  const m = data.milestone;
+  const tasks = data.tasks || [];
+  const log = data.progress_log || [];
+  const docs = data.docs || {};
+
+  const totalTasks = tasks.length;
+  const completeTasks = tasks.filter(t => t.status === 'complete').length;
+  const badgeClass = m.status === 'complete' ? 'badge-complete' : m.status === 'in-progress' ? 'badge-progress' : 'badge-planned';
+
+  // Header
+  let html = `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+      <span style="font-size:20px;font-weight:700">${m.id} — ${m.name || ''}</span>
+      <span class="status-badge ${badgeClass}">${m.status || 'unknown'}</span>
+      ${m.branch ? `<span style="font-family:var(--mono);font-size:12px;color:var(--text-muted)">⎇ ${m.branch}</span>` : ''}
+    </div>`;
+
+  // Task summary
+  if (totalTasks > 0) {
+    html += `<div style="margin-bottom:8px;font-size:13px;color:var(--text-secondary)">${completeTasks}/${totalTasks} tasks complete</div>`;
+    const pct = Math.round((completeTasks / totalTasks) * 100);
+    html += `<div class="progress-bar-container" style="margin-bottom:24px"><div class="progress-bar-fill" style="width:${pct}%"></div></div>`;
+  }
+
+  // Tasks table
+  if (tasks.length) {
+    html += '<div class="section-title">Tasks <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px">(click to inspect)</span></div>';
+    html += '<table class="data-table"><thead><tr><th>ID</th><th>Name</th><th>Status</th><th>Completed</th></tr></thead><tbody>';
+    for (let i = 0; i < tasks.length; i++) {
+      const t = tasks[i];
+      const cls = t.status === 'complete' ? 'badge-complete' : t.status === 'in-progress' ? 'badge-progress' : t.status === 'in-review' ? 'badge-progress' : t.status === 'failed' ? 'badge-failed' : 'badge-planned';
+      html += `<tr style="cursor:pointer" onclick="showTaskDetail(${i})">
+        <td class="id-col">${t.id}</td>
+        <td>${t.name || ''}</td>
+        <td><span class="status-badge ${cls}">${t.status || 'no status'}</span></td>
+        <td style="font-family:var(--mono);font-size:11px;color:var(--text-muted)">${t.completed_at || '—'}</td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+  }
+
+  // Tabs for docs
+  const docNames = [];
+  if (docs['prd.md']) docNames.push(['prd.md', 'PRD']);
+  if (docs['design.md']) docNames.push(['design.md', 'Design']);
+  if (docs['feedback.md']) docNames.push(['feedback.md', 'Feedback']);
+  if (docs['release_notes.md']) docNames.push(['release_notes.md', 'Release Notes']);
+  if (log.length) docNames.push(['_log', 'Progress Log']);
+
+  if (docNames.length) {
+    html += '<div class="tab-bar" id="ms-tabs">';
+    for (let i = 0; i < docNames.length; i++) {
+      html += `<button class="tab-btn ${i === 0 ? 'active' : ''}" data-tab-key="${docNames[i][0]}" onclick="switchMsTab('${docNames[i][0]}')">${docNames[i][1]}</button>`;
+    }
+    html += '</div>';
+    html += '<div id="ms-tab-content"></div>';
+  }
+
+  el.innerHTML = html;
+
+  // Render first tab
+  if (docNames.length) {
+    switchMsTab(docNames[0][0], docs, log);
+  }
+
+  // Store docs/log/tasks for tab switching
+  el._docs = docs;
+  el._log = log;
+  el._tasks = tasks;
+}
+
+function switchMsTab(key, docs, log) {
+  const el = document.getElementById('content');
+  docs = docs || el._docs || {};
+  log = log || el._log || [];
+  const tasks = el._tasks || [];
+  const contentEl = document.getElementById('ms-tab-content');
+  if (!contentEl) return;
+
+  // Update active tab styling
+  document.querySelectorAll('#ms-tabs .tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tabKey === key);
+  });
+
+  if (key === '_log') {
+    contentEl.innerHTML = '<div class="log-timeline">' + log.map(formatLogLine).join('\n') + '</div>';
+  } else if (key.startsWith('_task:')) {
+    const idx = parseInt(key.split(':')[1], 10);
+    const task = tasks[idx];
+    if (task) {
+      const yaml = Object.entries(task).map(([k, v]) => `${k}: ${v}`).join('\n');
+      const highlighted = hljs.highlight(yaml, { language: 'yaml' }).value;
+      contentEl.innerHTML = `<div style="margin-bottom:8px;font-size:13px;font-weight:600;color:var(--text-primary)">Task ${task.id}: ${task.name || ''}</div><pre style="margin:0;background:var(--bg-tertiary);border:1px solid var(--border);border-radius:6px;padding:16px"><code class="hljs">${highlighted}</code></pre>`;
+    }
+  } else if (docs[key]) {
+    contentEl.innerHTML = '<div class="md-viewer">' + marked.parse(docs[key]) + '</div>';
+    contentEl.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
+  } else {
+    contentEl.innerHTML = '<div class="empty-state"><div class="msg">No content available</div></div>';
+  }
+}
+
+function showTaskDetail(taskIndex) {
+  const el = document.getElementById('content');
+  const tasks = el._tasks || [];
+  const task = tasks[taskIndex];
+  if (!task) return;
+
+  const tabKey = `_task:${taskIndex}`;
+
+  // Ensure the tab exists in the tab bar; add it dynamically if not
+  const tabBar = document.getElementById('ms-tabs');
+  if (tabBar) {
+    // Remove any previous task tab
+    tabBar.querySelectorAll('.tab-btn[data-tab-key^="_task:"]').forEach(btn => btn.remove());
+    // Add new task tab
+    const btn = document.createElement('button');
+    btn.className = 'tab-btn';
+    btn.dataset.tabKey = tabKey;
+    btn.textContent = `Task ${task.id}`;
+    btn.onclick = () => switchMsTab(tabKey);
+    tabBar.appendChild(btn);
+  }
+
+  switchMsTab(tabKey);
+}
+
+function formatLogLine(line) {
+  // Color-code agent tags
+  let colored = line
+    .replace(/(\d{4}-\d{2}-\d{2}T[\d:.Z+-]+)/g, '<span class="timestamp">$1</span>')
+    .replace(/\[PM\]/g, '<span class="agent-pm">[PM]</span>')
+    .replace(/\[DEV:[^\]]+\]/g, '<span class="agent-dev">$&</span>')
+    .replace(/\[REVIEW:[^\]]+\]/g, '<span class="agent-review">$&</span>')
+    .replace(/\[QA\]/g, '<span class="agent-qa">[QA]</span>')
+    .replace(/\[ARCHITECT\]/g, '<span class="agent-arch">[ARCHITECT]</span>');
+  return `<div class="log-line">${colored}</div>`;
+}
+
+// ── File Browser ──
+function renderFileBrowser(el) {
+  if (!fileTreeData) {
+    el.innerHTML = '<div class="empty-state"><div class="icon">📂</div><div class="msg">Loading file tree...</div></div>';
+    return;
+  }
+  el.innerHTML = `<div class="file-browser">
+    <div class="file-tree" id="file-tree">${renderTree(fileTreeData, 0)}</div>
+    <div class="file-viewer" id="file-viewer">
+      <div class="empty-state"><div class="icon">📄</div><div class="msg">Select a file to view</div></div>
+    </div>
+  </div>`;
+}
+
+function renderTree(items, depth) {
+  let html = '';
+  for (const item of items) {
+    const indent = depth * 16;
+    if (item.type === 'dir') {
+      const id = 'dir-' + item.path.replace(/[^a-zA-Z0-9]/g, '-');
+      html += `<div class="tree-item" style="padding-left:${12 + indent}px" onclick="toggleDir('${id}', event)">
+        <span class="tree-dir-toggle" id="toggle-${id}">▸</span>
+        <span class="tree-icon">📁</span>
+        <span>${item.name}</span>
+      </div>`;
+      html += `<div class="tree-children" id="${id}">${renderTree(item.children || [], depth + 1)}</div>`;
+    } else {
+      const icon = getFileIcon(item.name);
+      html += `<div class="tree-item ${selectedFilePath === item.path ? 'active' : ''}" style="padding-left:${12 + indent + 18}px" onclick="selectFile('${item.path}')">
+        <span class="tree-icon">${icon}</span>
+        <span>${item.name}</span>
+      </div>`;
+    }
+  }
+  return html;
+}
+
+function getFileIcon(name) {
+  const ext = name.split('.').pop()?.toLowerCase();
+  const icons = {
+    md: '📝', yaml: '⚙', yml: '⚙', json: '{ }', py: '🐍',
+    ts: '🔷', tsx: '🔷', js: '📜', jsx: '📜', html: '🌐', css: '🎨',
+    log: '📋', png: '🖼', jpg: '🖼', jpeg: '🖼', gif: '🖼', svg: '🖼',
+    toml: '⚙', cfg: '⚙', ini: '⚙', sh: '⚡', bash: '⚡',
+  };
+  return icons[ext] || '📄';
+}
+
+function toggleDir(id, event) {
+  event.stopPropagation();
+  const children = document.getElementById(id);
+  const toggle = document.getElementById('toggle-' + id);
+  if (children) {
+    const isOpen = children.classList.toggle('open');
+    if (toggle) toggle.textContent = isOpen ? '▾' : '▸';
+  }
+}
+
+async function selectFile(path) {
+  selectedFilePath = path;
+  const viewer = document.getElementById('file-viewer');
+  if (!viewer) return;
+
+  viewer.innerHTML = '<div class="empty-state"><div class="icon">⏳</div><div class="msg">Loading...</div></div>';
+
+  // Update active state in tree
+  document.querySelectorAll('.file-tree .tree-item').forEach(el => el.classList.remove('active'));
+  event?.target?.closest?.('.tree-item')?.classList?.add('active');
+
+  const ext = path.split('.').pop()?.toLowerCase();
+  const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico'];
+
+  if (imageExts.includes(ext)) {
+    viewer.innerHTML = `<div class="file-path-bar">${path}</div><div style="text-align:center;padding:20px"><img src="/api/file?path=${encodeURIComponent(path)}" style="max-width:100%;border-radius:6px"></div>`;
+    return;
+  }
+
+  const data = await fetchJSON(`/api/file?path=${encodeURIComponent(path)}`);
+  if (!data || data.error) {
+    viewer.innerHTML = `<div class="empty-state"><div class="icon">⚠</div><div class="msg">${data?.error || 'Failed to load'}</div></div>`;
+    return;
+  }
+
+  let content = data.content;
+  let html = `<div class="file-path-bar">${path}</div>`;
+
+  if (ext === 'md') {
+    html += `<div class="md-viewer">${marked.parse(content)}</div>`;
+  } else {
+    const lang = {yaml: 'yaml', yml: 'yaml', json: 'json', py: 'python', ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript', html: 'html', css: 'css', sh: 'bash', bash: 'bash', toml: 'toml'}[ext] || '';
+    if (lang) {
+      try {
+        const highlighted = hljs.highlight(content, { language: lang }).value;
+        html += `<pre style="margin:0;background:transparent;border:none"><code class="hljs">${highlighted}</code></pre>`;
+      } catch {
+        html += `<div class="file-content-view">${escapeHtml(content)}</div>`;
+      }
+    } else {
+      html += `<div class="file-content-view">${escapeHtml(content)}</div>`;
+    }
+  }
+
+  viewer.innerHTML = html;
+  viewer.querySelectorAll('pre code').forEach(block => {
+    if (!block.classList.contains('hljs')) hljs.highlightElement(block);
+  });
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ── Navigation ──
+function navigate(view) {
+  currentView = view;
+  render();
+}
+
+// ── Init ──
+pollData();
+setInterval(pollData, 3000);
+</script>
+</body>
+</html>

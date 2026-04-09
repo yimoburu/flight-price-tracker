@@ -18,14 +18,14 @@ export function PriceHistoryChart({ snapshots }: PriceHistoryChartProps) {
   }));
 
   return (
-    <ResponsiveContainer width="100%" height={300}>
+    <ResponsiveContainer width="100%" height={200}>
       <LineChart data={chartData}>
-        <CartesianGrid strokeDasharray="3 3" />
+        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
         <XAxis dataKey="date" />
         <YAxis dataKey="price" />
-        <Tooltip />
+        <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '12px' }} />
         <Legend />
-        <Line type="monotone" dataKey="price" dot={true} />
+        <Line type="monotone" dataKey="price" stroke="#0284c7" dot={true} />
       </LineChart>
     </ResponsiveContainer>
   );

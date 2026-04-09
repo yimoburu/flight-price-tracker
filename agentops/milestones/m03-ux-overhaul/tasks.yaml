@@ -1,0 +1,860 @@
+tasks:
+  - id: t01
+    name: "Tailwind CSS + shadcn/ui tooling setup"
+    description: |
+      Install Tailwind CSS v3 (PostCSS approach), configure the build pipeline, install all required
+      shadcn/ui components, and add Inter font. This task creates the foundation that all other tasks
+      depend on. No React component changes — only config, package.json, and the global CSS file.
+    interfaces: |
+      Files produced/modified:
+        frontend/package.json
+          - devDependencies: tailwindcss@^3, postcss, autoprefixer
+          - dependencies: @fontsource/inter (NEW)
+          - dependencies: radix-ui, lucide-react, clsx, tailwind-merge, class-variance-authority (installed by shadcn CLI)
+        frontend/tailwind.config.ts (NEW)
+        frontend/postcss.config.js (NEW)
+        frontend/tsconfig.json — add baseUrl + paths alias
+        frontend/vite.config.ts — add resolve.alias + path import
+        frontend/src/index.css (NEW — Tailwind directives + CSS variables)
+        frontend/src/main.tsx — add CSS and font imports
+        frontend/components.json (NEW — shadcn config)
+        frontend/src/lib/utils.ts (NEW — cn() utility)
+        frontend/src/components/ui/*.tsx (11 files — Button, Card, Badge, Dialog, Input, Label,
+          Select, Skeleton, Separator, Tooltip, AlertDialog)
+    acceptance_criteria: |
+      1. `cd frontend && npm install` completes without error.
+      2. `cd frontend && npm run build` produces a dist/assets/*.css file containing Tailwind base
+         styles (check for `box-sizing: border-box` in the CSS output).
+      3. `cd frontend && npm test` passes all 98 tests (12 test files).
+      4. `frontend/src/components/ui/dialog.tsx` exists and contains `DialogContent` export.
+      5. `frontend/src/lib/utils.ts` exports a `cn` function.
+      6. `frontend/src/index.css` begins with `@tailwind base;` and has `:root { --background: ...}`.
+      7. `import { Button } from '@/components/ui/button'` resolves in TypeScript without error
+         (run `cd frontend && npx tsc --noEmit` to verify).
+    implementation_guidelines: |
+      STEP 1: Install Tailwind CSS v3 + PostCSS
+        cd frontend
+        npm install -D tailwindcss@3 postcss autoprefixer
+        npm install @fontsource/inter
+
+      STEP 2: Update tsconfig.json — add inside compilerOptions:
+        "baseUrl": ".",
+        "paths": { "@/*": ["./src/*"] }
+
+      STEP 3: Update vite.config.ts — add path import and resolve.alias:
+        import path from 'path';
+        // inside defineConfig:
+        resolve: {
+          alias: { '@': path.resolve(__dirname, './src') },
+        },
+
+      STEP 4: Run shadcn init (NON-INTERACTIVE — verified in POC):
+        cd frontend
+        npx shadcn@latest init --template=vite --yes --base=radix --preset=nova
+        npx shadcn@latest add card badge dialog input label select skeleton separator tooltip alert-dialog --yes
+
+      STEP 5: Replace the shadcn-generated src/index.css entirely with this content
+      (the Nova preset generates v4-syntax CSS that breaks Tailwind v3 — replace it):
+        @tailwind base;
+        @tailwind components;
+        @tailwind utilities;
+
+        @layer base {
+          :root {
+            --background: 210 40% 98%;
+            --foreground: 222 84% 5%;
+            --card: 0 0% 100%;
+            --card-foreground: 222 84% 5%;
+            --popover: 0 0% 100%;
+            --popover-foreground: 222 84% 5%;
+            --primary: 199 89% 48%;
+            --primary-foreground: 0 0% 100%;
+            --secondary: 210 40% 96%;
+            --secondary-foreground: 222 84% 5%;
+            --muted: 210 40% 96%;
+            --muted-foreground: 215 16% 47%;
+            --accent: 210 40% 96%;
+            --accent-foreground: 222 84% 5%;
+            --destructive: 0 84% 60%;
+            --destructive-foreground: 0 0% 100%;
+            --border: 214 32% 91%;
+            --input: 214 32% 91%;
+            --ring: 199 89% 48%;
+            --radius: 0.5rem;
+          }
+          * { @apply border-border; }
+          body { @apply bg-background text-foreground font-sans; }
+        }
+
+      STEP 6: Replace frontend/tailwind.config.ts with:
+        import type { Config } from 'tailwindcss';
+        export default {
+          darkMode: ['class'],
+          content: ['./index.html', './src/**/*.{ts,tsx}'],
+          theme: {
+            extend: {
+              fontFamily: {
+                sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+              },
+              colors: {
+                brand: { 50: '#f0f9ff', 500: '#0284c7', 600: '#0284c7', 700: '#0369a1' },
+                border: 'hsl(var(--border))',
+                input: 'hsl(var(--input))',
+                ring: 'hsl(var(--ring))',
+                background: 'hsl(var(--background))',
+                foreground: 'hsl(var(--foreground))',
+                primary: { DEFAULT: 'hsl(var(--primary))', foreground: 'hsl(var(--primary-foreground))' },
+                secondary: { DEFAULT: 'hsl(var(--secondary))', foreground: 'hsl(var(--secondary-foreground))' },
+                muted: { DEFAULT: 'hsl(var(--muted))', foreground: 'hsl(var(--muted-foreground))' },
+                accent: { DEFAULT: 'hsl(var(--accent))', foreground: 'hsl(var(--accent-foreground))' },
+                destructive: { DEFAULT: 'hsl(var(--destructive))', foreground: 'hsl(var(--destructive-foreground))' },
+                card: { DEFAULT: 'hsl(var(--card))', foreground: 'hsl(var(--card-foreground))' },
+                popover: { DEFAULT: 'hsl(var(--popover))', foreground: 'hsl(var(--popover-foreground))' },
+              },
+              borderRadius: {
+                lg: 'var(--radius)',
+                md: 'calc(var(--radius) - 2px)',
+                sm: 'calc(var(--radius) - 4px)',
+              },
+            },
+          },
+          plugins: [],
+        } satisfies Config;
+
+      STEP 7: Update frontend/src/main.tsx — add at top:
+        import '@fontsource/inter/400.css';
+        import '@fontsource/inter/600.css';
+        import './index.css';
+
+      STEP 8: Create frontend/postcss.config.js:
+        export default {
+          plugins: {
+            tailwindcss: {},
+            autoprefixer: {},
+          },
+        };
+
+      IMPORTANT GOTCHA: The shadcn CLI installs 'shadcn' as a runtime dependency.
+      This is normal — remove it from dependencies if unwanted, but it's harmless.
+
+      IMPORTANT GOTCHA: After step 4, if components.json has "style": "radix-nova",
+      the generated components import from "radix-ui" (new unified package), NOT from
+      "@radix-ui/react-*". This is correct — do not change the import paths.
+    dependencies: []
+    reference_docs: |
+      - poc/tailwind-vite-integration.md (VIABLE result)
+      - poc/shadcn-noninteractive.md (VIABLE result with constraints)
+      - poc/vitest-css-compat.md (VIABLE result)
+      - research/tailwind-shadcn-setup.md
+    status: in-review
+    completed_at: "2026-04-07T00:00:00Z"
+    retry_count: 0
+    assigned_task_id: null
+    completed_at: null
+
+  - id: t02
+    name: "App shell layout and NavBar redesign"
+    description: |
+      Style the global app shell (App.tsx) and the NavBar component. The NavBar becomes a fixed
+      top bar with brand logo, active-route highlighting, and shadow. App.tsx wraps everything
+      in the layout div and moves the <main> wrapper inside it.
+    interfaces: |
+      Files modified:
+        frontend/src/App.tsx
+        frontend/src/components/NavBar/index.tsx
+      No prop signature changes. No new component files.
+    acceptance_criteria: |
+      1. NavBar is visually fixed at the top: scrolling the page does not scroll the NavBar.
+      2. NavBar contains a Plane icon and "FlightTracker" text, both in text-sky-600.
+      3. On the "/" route, the "Search" link is visually highlighted (e.g., border-b-2 border-sky-600).
+         On "/tracked" route, "My Tracked Searches" link is highlighted.
+      4. NavBar has a white background and a 1px bottom border.
+      5. Page content does not overlap the NavBar (main content has top padding ≥ 56px).
+      6. NavBar is visible on both pages when navigating.
+      7. All 98 existing tests pass (NavBar tests use MemoryRouter — confirm NavBar renders links).
+      8. `npm run build` produces no TypeScript errors.
+    implementation_guidelines: |
+      frontend/src/App.tsx:
+        - Add className="min-h-screen bg-sky-50 font-sans" to outer wrapper div
+        - Wrap <Routes> in <main className="max-w-5xl mx-auto px-4 py-8 pt-20">
+          (pt-20 = 80px top padding to clear the 56px fixed NavBar + visual breathing room)
+        - Remove any <main> wrapper from HomePage.tsx and TrackedSearchesPage.tsx if present
+
+      frontend/src/components/NavBar/index.tsx:
+        - Add `import { useLocation } from 'react-router-dom';`
+        - Add `import { Plane } from 'lucide-react';`
+        - Outer nav: className="fixed top-0 left-0 right-0 z-50 h-14 bg-white border-b border-neutral-200 shadow-sm"
+        - Inner div: className="max-w-5xl mx-auto px-4 h-full flex items-center justify-between"
+        - Brand section (left): <div className="flex items-center gap-2">
+            <Plane className="h-5 w-5 text-sky-600" />
+            <span className="font-bold text-sky-600 text-lg">FlightTracker</span>
+          </div>
+        - Nav links (right): <div className="flex items-center gap-6">
+        - For each link, check `location.pathname === '/'` (or '/tracked') for active state:
+          activeClass = "text-sky-600 font-medium border-b-2 border-sky-600 pb-0.5"
+          inactiveClass = "text-neutral-600 hover:text-sky-600 transition-colors"
+        - Link text stays: "Search" and "My Tracked Searches"
+
+      HomePage.tsx: Remove the <main> wrapper (it moves to App.tsx). Keep <> fragment or <div>.
+      TrackedSearchesPage.tsx: Remove the <main> wrapper. Keep the h1 and content.
+
+      NOTE: NavBar.test.tsx renders <NavBar /> wrapped in a MemoryRouter. The test checks for
+      Link elements. Since NavBar now uses useLocation(), it MUST be rendered inside a Router.
+      NavBar.test.tsx already wraps with MemoryRouter, so tests should still pass as-is.
+      Verify by running `npm test` after changes.
+    dependencies: [t01]
+    reference_docs: |
+      - frontend/src/App.tsx (current)
+      - frontend/src/components/NavBar/index.tsx (current)
+      - prd.md section 4.2
+    status: in-review
+    retry_count: 0
+    assigned_task_id: null
+    completed_at: "2026-04-08T09:05:00Z"
+
+  - id: t03
+    name: "SearchForm and AirportAutocomplete redesign"
+    description: |
+      Style the SearchForm with a Card container, pill trip-type toggle, side-by-side date inputs,
+      and a prominent search button with loading spinner. Style the AirportAutocomplete with an
+      icon prefix and floating suggestion dropdown. Implement the return-date row with
+      visibility-hidden layout-shift prevention (UX Warning #3).
+    interfaces: |
+      Files modified:
+        frontend/src/components/SearchForm/index.tsx
+        frontend/src/components/AirportAutocomplete/index.tsx
+      No prop signature changes. All existing state and validation logic is preserved verbatim.
+    acceptance_criteria: |
+      1. SearchForm is wrapped in a Card with visible border, padding, and shadow.
+      2. "One Way" and "Round Trip" buttons look like pill-tabs; active one has sky-blue background.
+      3. Origin and Destination inputs are displayed side-by-side on screens ≥ 768px.
+      4. Departure date "From" and "To" inputs are side-by-side.
+      5. Return date row is ALWAYS present in the DOM. When trip type is "One Way":
+         the row has `visibility: hidden` (not `display: none`) so vertical space is preserved.
+         When "Round Trip": the row is visible and interactive.
+      6. Search button is full-width, sky-blue, h-12 tall.
+      7. When isLoading=true: Search button shows a spinning Loader2 icon.
+      8. AirportAutocomplete dropdown suggestion list has white background, shadow, border, and rounded corners.
+      9. IATA code in each suggestion row is bold and sky-700 colored.
+      10. `npm test` — EXPECTED TEST UPDATE: the test "return date fields are hidden for one_way"
+          uses `queryByLabelText('Return from') → not.toBeInTheDocument()`. Since elements are now
+          always in the DOM, update this test to instead assert:
+          `expect(screen.getByLabelText('Return from').closest('div')).toHaveStyle('visibility: hidden')`
+          All other SearchForm tests must still pass unchanged.
+      11. `npm run build` produces no TypeScript errors.
+    implementation_guidelines: |
+      SearchForm/index.tsx — keep ALL existing state variables and validation logic.
+      Only rewrite the JSX return block.
+
+      Imports to add:
+        import { Card, CardHeader, CardContent, CardTitle } from '@/components/ui/card';
+        import { Loader2 } from 'lucide-react';
+
+      Return JSX structure:
+        <Card className="w-full">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg font-semibold">Find Flights</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+
+              {/* Trip type toggle */}
+              <div className="flex gap-1 p-1 bg-neutral-100 rounded-full w-fit">
+                <button type="button" aria-pressed={tripType === 'one_way'}
+                  onClick={() => setTripType('one_way')}
+                  className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+                    tripType === 'one_way'
+                      ? 'bg-sky-600 text-white shadow-sm'
+                      : 'text-neutral-700 hover:text-neutral-900'
+                  }`}>One Way</button>
+                <button type="button" aria-pressed={tripType === 'round_trip'}
+                  onClick={() => setTripType('round_trip')}
+                  className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+                    tripType === 'round_trip'
+                      ? 'bg-sky-600 text-white shadow-sm'
+                      : 'text-neutral-700 hover:text-neutral-900'
+                  }`}>Round Trip</button>
+              </div>
+
+              {/* Airport row */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <AirportAutocomplete label="Origin" id="origin" value={origin} onChange={setOrigin} />
+                <AirportAutocomplete label="Destination" id="destination" value={destination} onChange={setDestination} />
+              </div>
+
+              {/* Departure date row */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="dep-from" className="text-sm font-medium text-neutral-700">Departure from</label>
+                  <input type="date" id="dep-from" value={depFrom} min={today}
+                    onChange={(e) => setDepFrom(e.target.value)}
+                    className="border border-neutral-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="dep-to" className="text-sm font-medium text-neutral-700">Departure to</label>
+                  <input type="date" id="dep-to" value={depTo} min={today}
+                    onChange={(e) => setDepTo(e.target.value)}
+                    className="border border-neutral-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" />
+                </div>
+              </div>
+
+              {/* Return date row — ALWAYS rendered, hidden via visibility */}
+              <div className={`grid grid-cols-2 gap-4 transition-all duration-200 ${
+                tripType === 'one_way'
+                  ? 'invisible opacity-0 pointer-events-none h-0 overflow-hidden'
+                  : 'visible opacity-100'
+              }`}>
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="ret-from" className="text-sm font-medium text-neutral-700">Return from</label>
+                  <input type="date" id="ret-from" value={retFrom} min={today}
+                    onChange={(e) => setRetFrom(e.target.value)}
+                    className="border border-neutral-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="ret-to" className="text-sm font-medium text-neutral-700">Return to</label>
+                  <input type="date" id="ret-to" value={retTo} min={today}
+                    onChange={(e) => setRetTo(e.target.value)}
+                    className="border border-neutral-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400" />
+                </div>
+              </div>
+
+              {/* Adults + Max Stops row */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="adults" className="text-sm font-medium text-neutral-700">Adults</label>
+                  <select id="adults" value={adults} onChange={(e) => setAdults(e.target.value)}
+                    className="border border-neutral-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400">
+                    {[1,2,3,4,5,6,7,8,9].map(n => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="max-stops" className="text-sm font-medium text-neutral-700">Max stops</label>
+                  <select id="max-stops" value={maxStops} onChange={(e) => setMaxStops(e.target.value)}
+                    className="border border-neutral-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400">
+                    <option value="">Any</option>
+                    <option value="0">Nonstop</option>
+                    <option value="1">1 stop</option>
+                  </select>
+                </div>
+              </div>
+
+              {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
+
+              <button type="submit" disabled={isLoading}
+                className="w-full h-12 bg-sky-600 hover:bg-sky-700 disabled:opacity-60 text-white rounded-lg font-medium flex items-center justify-center gap-2 transition-colors">
+                {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+                Search
+              </button>
+            </form>
+          </CardContent>
+        </Card>
+
+      IMPORTANT — Return date visibility approach:
+      Use `h-0 overflow-hidden invisible opacity-0` for one_way so the element takes zero
+      visual height but still exists in the DOM. The label still has htmlFor matching the input id,
+      so getByLabelText still works in tests. The test "return date fields are hidden for one_way"
+      must be updated to check for visibility/class rather than presence/absence.
+
+      AirportAutocomplete/index.tsx — add icon prefix and dropdown styling:
+      Imports: import { PlaneTakeoff, PlaneLanding } from 'lucide-react';
+      - Wrap the input in a relative container: <div className="relative">
+      - Add icon before the input inside a <div className="relative flex items-center">:
+        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none">
+          {label === 'Origin' ? <PlaneTakeoff className="h-4 w-4" /> : <PlaneLanding className="h-4 w-4" />}
+        </div>
+      - Input: add className="w-full pl-9 pr-3 py-2 border border-neutral-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
+      - Dropdown ul: className="absolute z-50 w-full mt-1 bg-white shadow-lg border border-neutral-200 rounded-lg overflow-hidden max-h-64 overflow-y-auto"
+      - Each li: className="px-3 py-2 cursor-pointer hover:bg-sky-50 flex flex-col"
+      - IATA span: className="font-mono font-bold text-sky-700"
+      - Name/city span: className="text-sm text-neutral-500"
+    dependencies: [t01, t02]
+    reference_docs: |
+      - frontend/src/components/SearchForm/index.tsx (current)
+      - frontend/src/components/AirportAutocomplete/index.tsx (current)
+      - frontend/src/components/SearchForm/SearchForm.test.tsx (must review — one test needs update)
+      - prd.md sections 4.3 and 4.4
+    status: in-progress
+    retry_count: 0
+    assigned_task_id: null
+    completed_at: null
+
+  - id: t04
+    name: "ResultsList, FlightCard, and TrackButton redesign"
+    description: |
+      Style flight search results: 3 skeleton loading cards, flight cards with prominent price
+      and stop badges, and the TrackButton/Dialog. Move TrackButton to a sticky bottom bar
+      (UX Warning #1). Move the List/Grid toggle into ResultsList. Upgrade the TrackButton's
+      raw div dialog to a shadcn Dialog with backdrop.
+    interfaces: |
+      Files modified:
+        frontend/src/pages/HomePage.tsx
+        frontend/src/components/ResultsList/index.tsx
+          — NEW props: viewMode: 'list' | 'grid', onViewModeChange: (mode: 'list' | 'grid') => void
+        frontend/src/components/ResultsList/FlightCard.tsx
+        frontend/src/components/TrackButton/index.tsx
+      Interface change: ResultsList gains two new props for view mode control.
+    acceptance_criteria: |
+      1. While loading (status='loading'), 3 skeleton card placeholders are shown instead of text.
+         Each skeleton is a Card-shaped div with Skeleton content lines. aria-hidden="true" on the
+         skeleton wrapper div.
+      2. Flight cards have a visible card border and shadow. Price is text-2xl font-bold text-sky-600.
+         Airport codes are text-xl font-semibold.
+      3. A nonstop flight shows a green badge. A flight with 1+ stops shows an amber badge with the
+         stop count.
+      4. TrackButton trigger button shows a Bell icon and "Track this search" text.
+      5. Clicking "Track this search" opens a modal with a dark backdrop overlay.
+      6. The modal has a route summary section, email input, price threshold input.
+      7. Pressing Escape closes the modal (shadcn Dialog handles this automatically).
+      8. Clicking outside the modal overlay closes it.
+      9. The Track button area appears as a sticky bar at the bottom of the viewport after search
+         results load (not inline with List/Grid toggles).
+      10. List/Grid toggle buttons appear inside the ResultsList header, right-aligned.
+      11. All existing TrackButton tests pass. The key behaviors tested are:
+          - dialog role present when open (shadcn Dialog renders role="dialog" on DialogContent)
+          - dialog not present when closed (shadcn Dialog unmounts from DOM when closed)
+          - getByLabelText('Alert email') and getByLabelText(/price threshold/i) still find inputs
+          - getByRole('button', { name: /cancel/i }) still works
+      12. `npm run build` produces no TypeScript errors.
+    implementation_guidelines: |
+      HomePage.tsx changes:
+        - Remove TrackButton from the toggle buttons section
+        - Add sticky TrackButton bar after ResultsList:
+          {status === 'success' && results.length > 0 && (
+            <div className="sticky bottom-0 bg-white border-t border-neutral-200 py-3 flex justify-end">
+              <TrackButton searchParams={searchParams!} currency={results[0]?.currency ?? 'USD'} />
+            </div>
+          )}
+        - Pass viewMode and setViewMode to ResultsList:
+          <ResultsList status={status} results={results} errorMessage={errorMessage}
+            viewMode={viewMode} onViewModeChange={setViewMode} />
+        - Remove the standalone view-toggle div from HomePage
+
+      ResultsList/index.tsx new props:
+        interface ResultsListProps {
+          status: SearchStatus;
+          results: FlightOfferResponse[];
+          errorMessage: string;
+          viewMode: 'list' | 'grid';
+          onViewModeChange: (mode: 'list' | 'grid') => void;
+        }
+        Imports: import { LayoutList, LayoutGrid } from 'lucide-react'; import { Skeleton } from '@/components/ui/skeleton';
+        Loading state — replace text with:
+          <div role="status" aria-live="polite" aria-hidden="true" className="flex flex-col gap-4">
+            {[1,2,3].map(i => (
+              <div key={i} className="rounded-lg border border-neutral-200 p-6">
+                <div className="flex justify-between mb-4">
+                  <Skeleton className="h-5 w-32" />
+                  <Skeleton className="h-8 w-20" />
+                </div>
+                <Skeleton className="h-4 w-full mb-2" />
+                <Skeleton className="h-4 w-3/4" />
+              </div>
+            ))}
+          </div>
+        Results header (when results.length > 0):
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm text-neutral-500">Showing {count} result{plural}</p>
+            <div className="flex gap-1">
+              <button onClick={() => onViewModeChange('list')}
+                aria-pressed={viewMode === 'list'} aria-label="List view"
+                className={`p-2 rounded ${viewMode === 'list' ? 'bg-sky-100 text-sky-600' : 'text-neutral-400 hover:text-neutral-600'}`}>
+                <LayoutList className="h-4 w-4" />
+              </button>
+              <button onClick={() => onViewModeChange('grid')}
+                aria-pressed={viewMode === 'grid'} aria-label="Grid view"
+                className={`p-2 rounded ${viewMode === 'grid' ? 'bg-sky-100 text-sky-600' : 'text-neutral-400 hover:text-neutral-600'}`}>
+                <LayoutGrid className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+      FlightCard.tsx:
+        Imports: import { Card, CardContent } from '@/components/ui/card'; import { Badge } from '@/components/ui/badge'; import { Separator } from '@/components/ui/separator';
+        - Wrap article in <Card className="mb-4 hover:shadow-md transition-shadow">
+          <CardContent className="p-4">
+        - Price: <span className="text-2xl font-bold text-sky-600">{offer.price}</span>
+          followed by <span className="text-sm text-neutral-500 ml-1">{offer.currency}</span>
+        - Header row: flex justify-between items-start
+        - SegmentRow — airport codes: className="text-xl font-semibold"
+        - Segment times: className="text-base text-neutral-900"
+        - Duration + stops text: className="text-sm text-neutral-500"
+        - Stop badge in SegmentRow:
+          {stops === 0
+            ? <Badge className="bg-green-100 text-green-700 border-0">Nonstop</Badge>
+            : <Badge className="bg-amber-100 text-amber-700 border-0">{stops} stop{stops > 1 ? 's' : ''}</Badge>}
+        - Add <Separator className="my-3" /> between outbound and return sections
+
+      TrackButton/index.tsx:
+        Imports:
+          import { Button } from '@/components/ui/button';
+          import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+          import { Input } from '@/components/ui/input';
+          import { Label } from '@/components/ui/label';
+          import { Badge } from '@/components/ui/badge';
+          import { Bell, BellRing } from 'lucide-react';
+
+        Tracking state button: <Button disabled variant="outline" className="gap-2 text-neutral-400">
+          <BellRing className="h-4 w-4" />Tracking</Button>
+
+        Trigger button: <Button variant="outline" className="gap-2" onClick={() => setModalOpen(true)}>
+          <Bell className="h-4 w-4" />Track this search</Button>
+
+        Replace <div role="dialog"> with shadcn Dialog:
+          <Dialog open={modalOpen} onOpenChange={(open) => { if (!open) handleCancel(); }}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Track this search</DialogTitle>
+              </DialogHeader>
+              {/* Route summary */}
+              <div className="bg-sky-50 rounded-lg p-3 text-sm flex flex-col gap-1">
+                <div className="font-medium">{searchParams.origin?.iata_code} → {searchParams.destination?.iata_code}</div>
+                <Badge variant="secondary" className="w-fit">{searchParams.trip_type === 'one_way' ? 'One Way' : 'Round Trip'}</Badge>
+                <div className="text-neutral-500">{searchParams.departure_date_from} to {searchParams.departure_date_to}</div>
+              </div>
+              {/* Email field */}
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="track-email">Alert email</Label>
+                <Input id="track-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+              </div>
+              {/* Threshold field */}
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="track-threshold">Price threshold ({currency})</Label>
+                <Input id="track-threshold" type="number" min="0.01" step="0.01"
+                  value={threshold} onChange={(e) => setThreshold(e.target.value)} />
+              </div>
+              {formError && <p role="alert" className="text-sm text-red-500">{formError}</p>}
+              <div className="flex flex-col gap-2 pt-2">
+                <Button className="w-full bg-sky-600 hover:bg-sky-700" onClick={handleSave} disabled={submitting}>Save</Button>
+                <Button variant="ghost" className="w-full" onClick={handleCancel}>Cancel</Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+      IMPORTANT — TrackButton test compatibility:
+        shadcn's DialogContent renders with role="dialog" when open and is removed from DOM when
+        closed (portal pattern). The existing tests check getByRole('dialog')/queryByRole('dialog').
+        If the portal renders outside the test container, wrap the render call in your test with
+        a custom container, OR use screen.getByRole('dialog') which searches the entire document.
+        @testing-library/react's `screen` queries search document.body, so portal-rendered dialogs
+        ARE found by screen.getByRole('dialog').
+        The existing tests should work WITHOUT modification. Verify by running `npm test`.
+    dependencies: [t01, t02]
+    reference_docs: |
+      - frontend/src/pages/HomePage.tsx (current)
+      - frontend/src/components/ResultsList/index.tsx (current)
+      - frontend/src/components/ResultsList/FlightCard.tsx (current)
+      - frontend/src/components/TrackButton/index.tsx (current)
+      - frontend/src/components/TrackButton/TrackButton.test.tsx (must NOT break)
+      - prd.md sections 4.5 and 4.7
+    status: in-progress
+    retry_count: 0
+    assigned_task_id: null
+    completed_at: null
+
+  - id: t05
+    name: "PriceGrid redesign with color legend"
+    description: |
+      Style the PriceGrid component with a Tailwind class-based tier system (green/white/red),
+      add a color legend row above the grid (UX Warning #2), and make the grid horizontally
+      scrollable on narrow viewports. Replace the existing HSL-based priceColor() function
+      with a priceTier() function returning Tailwind class strings.
+      Also display currency in price cells (default USD): read currency from offers[0]?.currency ?? 'USD'
+      and prefix all price values with the currency code (e.g. "USD 150.00") or a currency header row.
+      Add "All prices in USD" (or actual currency) to the legend area.
+    interfaces: |
+      Files modified:
+        frontend/src/components/PriceGrid/index.tsx
+      Export change: priceColor(price, min, max): string → priceTier(price, p25, p75): string
+      The PriceGrid component's prop signature (offers, tripType) is UNCHANGED.
+    acceptance_criteria: |
+      1. The cheapest 25% of prices shown with bg-green-50 text-green-700 background.
+      2. The most expensive 25% shown with bg-red-50 text-red-600 background.
+      3. Middle 50% shown with bg-white text-neutral-900.
+      4. A color legend row appears above the table with three labeled swatches:
+         "Lowest prices" (green), "Mid-range" (white), "Highest prices" (red).
+      5. The table is horizontally scrollable on viewports narrower than its content.
+      5b. Currency is displayed alongside prices — read from `offers[0]?.currency ?? 'USD'`.
+          Add a note "All prices in {currency}" to the legend row (right-aligned or below the swatches).
+          Price cell values remain numeric (e.g. "150.00") — currency is indicated at the legend level,
+          not per-cell, to avoid visual clutter in a dense grid.
+      6. Header row/column cells are bg-neutral-50 with muted text and borders.
+      7. Each data cell has hover:ring-2 hover:ring-sky-400 on hover.
+      8. `npm test` — EXPECTED TEST UPDATE: PriceGrid.test.tsx tests `priceColor()` by name.
+         The function is renamed to `priceTier()` and returns class strings not HSL colors.
+         Update PriceGrid.test.tsx:
+           - Rename import: `import { PriceGrid, priceTier } from './index';`
+           - Update test values: priceTier(low, p25, p75) → 'bg-green-50 text-green-700'
+           - Update test values: priceTier(high, p25, p75) → 'bg-red-50 text-red-600'
+           - Update test values: priceTier(mid, p25, p75) → 'bg-white text-neutral-900'
+      9. `npm run build` produces no TypeScript errors.
+    implementation_guidelines: |
+      PriceGrid/index.tsx:
+
+      Replace priceColor() with priceTier():
+        export function priceTier(price: number, p25: number, p75: number): string {
+          if (price <= p25) return 'bg-green-50 text-green-700';
+          if (price >= p75) return 'bg-red-50 text-red-600';
+          return 'bg-white text-neutral-900';
+        }
+
+      Calculate p25 and p75 from all prices in the grid:
+        const allPrices = [...priceMap.values()].sort((a, b) => a - b);
+        const p25 = allPrices[Math.floor(allPrices.length * 0.25)];
+        const p75 = allPrices[Math.floor(allPrices.length * 0.75)];
+
+      Color legend component (render above table):
+        <div className="flex gap-4 text-xs mb-3 text-neutral-600 items-center">
+          <span className="font-medium text-neutral-700">Price range:</span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-4 h-4 rounded border border-green-200 bg-green-50 flex-shrink-0" />
+            Lowest prices
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-4 h-4 rounded border border-neutral-200 bg-white flex-shrink-0" />
+            Mid-range
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-4 h-4 rounded border border-red-200 bg-red-50 flex-shrink-0" />
+            Highest prices
+          </span>
+        </div>
+
+      Outer wrapper: <div className="overflow-x-auto">
+      Table: className="border-collapse text-sm w-full"
+      Header cells (th): className="bg-neutral-50 text-neutral-500 text-xs font-semibold p-2 border border-neutral-200 whitespace-nowrap"
+      Data cells (td with price): className={`p-2 text-center font-medium border border-neutral-200 cursor-pointer hover:ring-2 hover:ring-sky-400 hover:ring-inset transition-all ${priceTier(price, p25, p75)}`}
+      Empty data cells: className="p-2 bg-neutral-50 border border-neutral-200"
+
+      Also remove the old `import` of priceColor if used in tests externally.
+
+      PriceGrid.test.tsx — update the exported function tests:
+        Old: import { PriceGrid, priceColor } from './index';
+             expect(priceColor(100, 100, 200)).toBe('hsl(120, 70%, 45%)');
+        New: import { PriceGrid, priceTier } from './index';
+             expect(priceTier(100, 100, 150)).toBe('bg-green-50 text-green-700');
+             expect(priceTier(200, 100, 150)).toBe('bg-red-50 text-red-600');
+             expect(priceTier(125, 100, 150)).toBe('bg-white text-neutral-900');
+    dependencies: [t01, t02]
+    reference_docs: |
+      - frontend/src/components/PriceGrid/index.tsx (current)
+      - frontend/src/components/PriceGrid/PriceGrid.test.tsx (must update)
+      - prd.md section 4.6
+    status: in-progress
+    retry_count: 0
+    assigned_task_id: null
+    completed_at: null
+
+  - id: t06
+    name: "TrackedSearchesPage, TrackedSearchRow, and PriceHistoryChart redesign"
+    description: |
+      Style the tracked searches page with a page header, a polished empty state with icon, and
+      card-layout tracked search rows. Replace window.confirm with shadcn AlertDialog for delete
+      confirmation. Add relative-time display and price color-coding (green when best < threshold).
+      Update the PriceHistoryChart with brand colors and reduced height.
+    interfaces: |
+      Files modified:
+        frontend/src/pages/TrackedSearchesPage.tsx
+        frontend/src/components/TrackedSearchRow/index.tsx
+        frontend/src/components/PriceHistoryChart/index.tsx
+      Prop signatures unchanged. Internal state change in TrackedSearchRow: add
+        const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+      Function rename: handleDelete() → split into handleDeleteClick() (opens dialog) +
+        handleConfirmDelete() (executes the API call, previously used window.confirm).
+    acceptance_criteria: |
+      1. When searches list is empty, a centered empty state is shown with a Search icon (neutral-300
+         color), "No tracked searches yet" heading, body text, and a "Search flights" button linking to "/".
+      2. Page has "My Tracked Searches" h1 (text-2xl font-bold) and subtitle text.
+      3. Each tracked search renders as a Card with route, trip type badge, dates, threshold,
+         best price, and last-checked time.
+      3b. Currency is shown next to all price amounts (threshold and best price).
+          Use the currency from the most recent snapshot if available
+          (snapshots[0].currency from history — but since history is not yet loaded in this row,
+          default to "USD"). Display as "USD 299.00" or "$299.00".
+          The TrackedSearch type has no currency field — use hardcoded default "USD" for display.
+      4. When current_best_price < threshold_price, the best price value is green (text-green-600).
+      5. Last checked time displays as relative (e.g. "2h ago", "Never") not raw ISO string.
+      6. Clicking Delete opens a shadcn AlertDialog with a title and description — NOT window.confirm.
+      7. Clicking the AlertDialog "Delete" action button calls deleteTrackedSearch().
+      8. Clicking the AlertDialog "Cancel" button closes the dialog without calling deleteTrackedSearch.
+      9. History expand/collapse still works with aria-expanded attribute.
+      10. PriceHistoryChart line is sky-600 blue (#0284c7), chart height is 200px.
+      11. `npm test` — EXPECTED TEST UPDATES in TrackedSearchRow.test.tsx:
+          a. Remove `vi.spyOn(window, 'confirm').mockReturnValue(true/false)` from beforeEach
+             and individual tests.
+          b. The test "delete button calls window.confirm and deleteTrackedSearch on confirm":
+             Rename and update: click Delete button → waitFor AlertDialog to appear → click
+             the "Delete" action button inside AlertDialog → verify deleteTrackedSearch called.
+          c. The test "does not call deleteTrackedSearch when confirm is cancelled":
+             Click Delete button → click "Cancel" in AlertDialog → verify not called.
+          d. Keep all other tests unchanged (history, expand, error display, render fields).
+      12. `npm run build` produces no TypeScript errors.
+    implementation_guidelines: |
+      TrackedSearchesPage.tsx:
+        Imports: add import { Button } from '@/components/ui/button'; import { Search } from 'lucide-react'; import { Link } from 'react-router-dom';
+        Remove the <main> wrapper (moved to App.tsx in t02).
+        Add page header before the map:
+          <div className="mb-6">
+            <h1 className="text-2xl font-bold text-neutral-900">My Tracked Searches</h1>
+            <p className="text-sm text-neutral-500 mt-1">Prices checked automatically every hour</p>
+          </div>
+        Replace `if (searches.length === 0) return <p>No tracked searches yet.</p>` with:
+          if (searches.length === 0) return (
+            <>
+              {/* page header */}
+              <div className="flex flex-col items-center py-16 gap-4 text-center">
+                <Search className="h-16 w-16 text-neutral-300" />
+                <h2 className="text-xl font-semibold text-neutral-700">No tracked searches yet</h2>
+                <p className="text-neutral-500 text-sm">Search for a flight and click "Track this search" to get started</p>
+                <Button asChild variant="outline"><Link to="/">Search flights</Link></Button>
+              </div>
+            </>
+          );
+
+      TrackedSearchRow/index.tsx:
+        Imports to add:
+          import { Card, CardContent } from '@/components/ui/card';
+          import { Badge } from '@/components/ui/badge';
+          import { Button } from '@/components/ui/button';
+          import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+            AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+            AlertDialogTrigger } from '@/components/ui/alert-dialog';
+          import { ChevronDown, ChevronUp, TrendingDown } from 'lucide-react';
+
+        Add state: const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+        Rename handleDelete → handleConfirmDelete (remove window.confirm line, just execute delete):
+          async function handleConfirmDelete() {
+            setDeleteDialogOpen(false);
+            try {
+              await deleteTrackedSearch(search.id);
+              onDeleted(search.id);
+            } catch (err) {
+              setDeleteError(err instanceof Error ? err.message : 'Delete failed');
+            }
+          }
+
+        Relative time helper function (add inside component or as module-level util):
+          function formatRelativeTime(isoString: string | null): string {
+            if (!isoString) return 'Never';
+            const diffMs = Date.now() - new Date(isoString).getTime();
+            const diffHours = Math.floor(diffMs / 3600000);
+            if (diffHours < 1) return 'Just now';
+            if (diffHours < 24) return `${diffHours}h ago`;
+            return `${Math.floor(diffHours / 24)}d ago`;
+          }
+
+        Price comparison:
+          const threshold = parseFloat(search.threshold_price);
+          const bestPrice = search.current_best_price ? parseFloat(search.current_best_price) : null;
+          const bestBelowThreshold = bestPrice !== null && bestPrice < threshold;
+
+        Card JSX structure:
+          <Card className="mb-4">
+            <CardContent className="p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xl font-semibold">{search.origin} → {search.destination}</span>
+                    <Badge variant="secondary">{search.trip_type === 'one_way' ? 'One Way' : 'Round Trip'}</Badge>
+                    {bestBelowThreshold && <TrendingDown className="h-4 w-4 text-green-600" />}
+                  </div>
+                  <div className="text-sm text-neutral-500 mt-1">
+                    Dep: {search.departure_date_from} – {search.departure_date_to}
+                    {search.trip_type === 'round_trip' && search.return_date_from &&
+                      ` | Ret: ${search.return_date_from} – ${search.return_date_to}`}
+                  </div>
+                  <div className="flex gap-4 mt-2 flex-wrap text-sm">
+                    <span>Alert: <span className="font-medium">${search.threshold_price}</span></span>
+                    <span data-testid="best-price">
+                      Best: <span className={bestBelowThreshold ? 'font-bold text-green-600' : 'font-medium'}>
+                        {search.current_best_price ?? '–'}
+                      </span>
+                    </span>
+                    <span data-testid="last-checked" className="text-neutral-400 text-xs self-end">
+                      Last checked: <span>{formatRelativeTime(search.last_checked_at)}</span>
+                    </span>
+                  </div>
+                </div>
+                <div className="flex gap-2 flex-shrink-0">
+                  <Button variant="outline" size="sm" aria-expanded={expanded} onClick={handleToggleHistory}
+                    className="gap-1">
+                    History {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                  </Button>
+                  <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="outline" size="sm" className="text-red-600 border-red-300 hover:bg-red-50">Delete</Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete tracked search?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will permanently remove the {search.origin} → {search.destination} search.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleConfirmDelete}
+                          className="bg-red-600 hover:bg-red-700 text-white">Delete</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </div>
+              {deleteError && <span role="alert" className="text-sm text-red-500 mt-2 block">{deleteError}</span>}
+              {expanded && (
+                <div className="mt-4 pt-4 border-t border-neutral-100">
+                  {historyStatus === 'loading' && <p className="text-sm text-neutral-500">Loading history...</p>}
+                  {historyStatus === 'error' && <p className="text-sm text-red-500">Failed to load history.</p>}
+                  {historyStatus === 'idle' && history && <PriceHistoryChart snapshots={history.snapshots} />}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+        IMPORTANT — Test compatibility for window.confirm removal:
+        The existing test "delete button calls window.confirm" uses:
+          vi.spyOn(window, 'confirm').mockReturnValue(true)
+          fireEvent.click(screen.getByRole('button', { name: /delete/i }))
+          expect(window.confirm).toHaveBeenCalledWith('Delete this tracked search?')
+
+        These tests MUST be updated. New pattern for the delete confirmation tests:
+          it('delete button opens AlertDialog and confirms delete on action click', async () => {
+            mockDeleteTrackedSearch.mockResolvedValue(undefined);
+            render(<TrackedSearchRow search={baseSearch} onDeleted={vi.fn()} />);
+            fireEvent.click(screen.getByRole('button', { name: /delete/i }));
+            // AlertDialog opens — find the destructive action button
+            const confirmBtn = await screen.findByRole('button', { name: /^delete$/i });
+            // There are two Delete buttons — the trigger and the action. Use findAllByRole if needed.
+            fireEvent.click(confirmBtn);
+            await waitFor(() => {
+              expect(mockDeleteTrackedSearch).toHaveBeenCalledWith('search-1');
+            });
+          });
+
+        NOTE: findByRole('button', { name: /^delete$/i }) may match multiple buttons (the trigger
+        and the action). Use findAllByRole and pick the last one (inside the dialog), or use a
+        more specific selector. The AlertDialogAction button text is "Delete" (exact match from code above).
+
+      PriceHistoryChart/index.tsx:
+        Update the Line component:
+          <Line type="monotone" dataKey="price" stroke="#0284c7" strokeWidth={2}
+            dot={{ fill: '#0284c7', r: 3 }} activeDot={{ r: 5 }} />
+        Update axes:
+          <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#64748b' }} />
+          <YAxis dataKey="price" tick={{ fontSize: 11, fill: '#64748b' }} />
+        Update grid:
+          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+        Update tooltip:
+          <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '12px' }} />
+        Change height: <ResponsiveContainer width="100%" height={200}>
+    dependencies: [t01, t02]
+    reference_docs: |
+      - frontend/src/pages/TrackedSearchesPage.tsx (current)
+      - frontend/src/components/TrackedSearchRow/index.tsx (current)
+      - frontend/src/components/PriceHistoryChart/index.tsx (current)
+      - frontend/src/components/TrackedSearchRow/TrackedSearchRow.test.tsx (MUST UPDATE)
+      - prd.md sections 4.8
+    status: in-progress
+    retry_count: 0
+    assigned_task_id: null
+    completed_at: null

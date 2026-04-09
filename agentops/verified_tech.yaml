@@ -1,0 +1,26 @@
+- v-id: v001
+  pattern: "Tailwind CSS v3 + PostCSS + Vite 5 build pipeline"
+  risk_category: R5
+  tier: smoke
+  result: VIABLE
+  evidence: "tailwindcss@3.4.19 installed via npm; postcss.config.js with tailwindcss+autoprefixer plugins; vite build produces 20.74KB CSS with full Tailwind utilities; requires explicit import './index.css' in main.tsx"
+  milestone: m03
+  date: "2026-04-04"
+
+- v-id: v002
+  pattern: "shadcn/ui non-interactive CLI init in Vite project (--template=vite --yes --base=radix --preset=nova)"
+  risk_category: R5
+  tier: full_poc
+  result: VIABLE
+  evidence: "npx shadcn@latest init --template=vite --yes --base=radix --preset=nova completes non-interactively; installs lucide-react, radix-ui, clsx, tailwind-merge, tw-animate-css; components added via npx shadcn@latest add <list> --yes; Nova preset CSS is v4-incompatible with Tailwind v3 — must replace generated index.css with v3-compatible HSL variable version and add color mappings to tailwind.config.ts"
+  milestone: m03
+  date: "2026-04-04"
+
+- v-id: v003
+  pattern: "Vitest jsdom + Tailwind CSS v3 + shadcn/ui (radix-ui) — test suite compatibility"
+  risk_category: R2
+  tier: smoke
+  result: VIABLE
+  evidence: "All 98 tests pass (12 test files) after full Tailwind + shadcn installation; jsdom silently ignores CSS imports; no css:true vitest config needed; resolve.alias @/* must be in vite.config.ts for build correctness"
+  milestone: m03
+  date: "2026-04-04"

@@ -33,25 +33,24 @@ export function HomePage() {
   }
 
   return (
-    <main>
+    <div>
       <h1>Flight Price Tracker</h1>
       <SearchForm onSearch={handleSearch} isLoading={status === 'loading'} />
-      {status === 'success' && results.length > 0 && (
-        <div>
-          <button onClick={() => setViewMode('list')} aria-pressed={viewMode === 'list'}>List</button>
-          <button onClick={() => setViewMode('grid')} aria-pressed={viewMode === 'grid'}>Grid</button>
-        </div>
-      )}
-      {status === 'success' && results.length > 0 && (
-        <TrackButton
-          searchParams={searchParams!}
-          currency={results[0]?.currency ?? 'USD'}
-        />
-      )}
       {viewMode === 'list' || status !== 'success'
-        ? <ResultsList status={status} results={results} errorMessage={errorMessage} />
+        ? <ResultsList
+            status={status}
+            results={results}
+            errorMessage={errorMessage}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+          />
         : <PriceGrid offers={results} tripType={tripType} />
       }
-    </main>
+      {status === 'success' && results.length > 0 && (
+        <div className="sticky bottom-0 bg-white border-t border-neutral-200 py-3 flex justify-end">
+          <TrackButton searchParams={searchParams!} currency={results[0]?.currency ?? 'USD'} />
+        </div>
+      )}
+    </div>
   );
 }

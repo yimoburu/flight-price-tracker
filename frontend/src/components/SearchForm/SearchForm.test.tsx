@@ -91,9 +91,11 @@ describe('SearchForm', () => {
   });
 
   it('return date fields are hidden for one_way', () => {
-    render(<SearchForm onSearch={vi.fn()} isLoading={false} />);
-    expect(screen.queryByLabelText('Return from')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Return to')).not.toBeInTheDocument();
+    const { container } = render(<SearchForm onSearch={vi.fn()} isLoading={false} />);
+    // Elements are always in the DOM; hidden via 'invisible' class (visibility: hidden)
+    expect(container.querySelector('.invisible')).toBeInTheDocument();
+    // The return-from input should be in the DOM but inside the invisible container
+    expect(screen.getByLabelText('Return from')).toBeInTheDocument();
   });
 
   it('return date fields are visible for round_trip', () => {

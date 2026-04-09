@@ -16,3 +16,4 @@ node_modules/
 tsconfig*.tsbuildinfo
 vite.config.d.ts
 vite.config.js
+agentops/.status-server.pid
