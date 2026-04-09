@@ -122,6 +122,27 @@ immediate first run on startup).
 existing sync patterns. The delayed first run protects the Amadeus free-tier quota
 during iterative development.
 
+## ADR-008: Tailwind CSS v3 via PostCSS (not Tailwind v4 Vite plugin)
+**Status:** [active]
+**Scope:** m03-ux-overhaul — CSS build pipeline
+**Decision:** Use Tailwind CSS v3 (`tailwindcss@^3`) integrated via PostCSS plugin (`postcss.config.js`), not the Tailwind v4 `@tailwindcss/vite` Vite plugin approach.
+**Alternatives:**
+- Tailwind CSS v4 with `@tailwindcss/vite` plugin: released in 2025, simpler Vite integration, but uses `@theme inline {}` CSS syntax incompatible with shadcn/ui Nova preset's generated CSS when both are present. The shadcn CLI's Nova preset generates CSS using v4 `@theme` syntax even when Tailwind v3 is installed, causing build failures.
+- Plain CSS / CSS Modules: rejected per PRD requirement for Tailwind.
+**Rationale:** The PRD explicitly specifies Tailwind CSS v3. Verified in POC (`poc/tailwind-vite-integration.md`) that v3 + PostCSS + Vite 5 builds cleanly. The shadcn/ui Nova preset CSS is v4-incompatible and must be replaced with a v3-compatible `index.css`; the PostCSS approach is simpler and the existing `vite.config.ts` already lacks any Tailwind plugin.
+**POC evidence:** poc/tailwind-vite-integration.md — VIABLE — Tailwind v3 + PostCSS produces 20KB CSS output; all 98 tests pass.
+
+## ADR-009: shadcn/ui Nova Preset with Manual index.css for Tailwind v3 Compatibility
+**Status:** [active]
+**Scope:** m03-ux-overhaul — shadcn/ui setup
+**Decision:** Use `npx shadcn@latest init --template=vite --yes --base=radix --preset=nova` to install shadcn/ui components non-interactively. After init, discard the auto-generated `index.css` and replace with a manually-written Tailwind v3-compatible version using HSL CSS variables. Map CSS variables to Tailwind colors in `tailwind.config.ts`.
+**Alternatives:**
+- Use the Nova preset CSS as-is: fails to build with Tailwind v3 due to `@theme inline {}` and `@import "shadcn/tailwind.css"` v4 syntax.
+- Use a different shadcn preset (e.g., base): produces a different component aesthetic and doesn't include Lucide icons by default.
+- Hand-scaffold all shadcn config files without CLI: more error-prone; CLI handles dependency resolution correctly.
+**Rationale:** Verified in POC (`poc/shadcn-noninteractive.md`) that the CLI runs fully non-interactively with the `--preset=nova` flag. The Nova preset installs the correct dependencies (`radix-ui`, `lucide-react`, `clsx`, `tailwind-merge`) and generates well-structured component files. Only the generated CSS is incompatible; replacing it with a standard v3 CSS variable setup resolves all build errors.
+**POC evidence:** poc/shadcn-noninteractive.md — VIABLE with constraints — all 11 components installed; build succeeds; 98/98 tests pass.
+
 ## ADR-007: BrowserRouter (HTML5 History API) for React Router
 **Status:** [active]
 **Scope:** m02-tracking-alerts — frontend routing
