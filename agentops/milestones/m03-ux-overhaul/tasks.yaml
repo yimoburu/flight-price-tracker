@@ -146,7 +146,8 @@ tasks:
       - poc/shadcn-noninteractive.md (VIABLE result with constraints)
       - poc/vitest-css-compat.md (VIABLE result)
       - research/tailwind-shadcn-setup.md
-    status: in-progress
+    status: in-review
+    completed_at: "2026-04-07T00:00:00Z"
     retry_count: 0
     assigned_task_id: null
     completed_at: null
@@ -206,10 +207,10 @@ tasks:
       - frontend/src/App.tsx (current)
       - frontend/src/components/NavBar/index.tsx (current)
       - prd.md section 4.2
-    status: pending
+    status: in-review
     retry_count: 0
     assigned_task_id: null
-    completed_at: null
+    completed_at: "2026-04-08T09:05:00Z"
 
   - id: t03
     name: "SearchForm and AirportAutocomplete redesign"
@@ -372,7 +373,7 @@ tasks:
       - frontend/src/components/AirportAutocomplete/index.tsx (current)
       - frontend/src/components/SearchForm/SearchForm.test.tsx (must review — one test needs update)
       - prd.md sections 4.3 and 4.4
-    status: pending
+    status: in-progress
     retry_count: 0
     assigned_task_id: null
     completed_at: null
@@ -545,7 +546,7 @@ tasks:
       - frontend/src/components/TrackButton/index.tsx (current)
       - frontend/src/components/TrackButton/TrackButton.test.tsx (must NOT break)
       - prd.md sections 4.5 and 4.7
-    status: pending
+    status: in-progress
     retry_count: 0
     assigned_task_id: null
     completed_at: null
@@ -638,7 +639,7 @@ tasks:
       - frontend/src/components/PriceGrid/index.tsx (current)
       - frontend/src/components/PriceGrid/PriceGrid.test.tsx (must update)
       - prd.md section 4.6
-    status: pending
+    status: in-progress
     retry_count: 0
     assigned_task_id: null
     completed_at: null
@@ -853,7 +854,7 @@ tasks:
       - frontend/src/components/PriceHistoryChart/index.tsx (current)
       - frontend/src/components/TrackedSearchRow/TrackedSearchRow.test.tsx (MUST UPDATE)
       - prd.md sections 4.8
-    status: pending
+    status: in-progress
     retry_count: 0
     assigned_task_id: null
     completed_at: null
